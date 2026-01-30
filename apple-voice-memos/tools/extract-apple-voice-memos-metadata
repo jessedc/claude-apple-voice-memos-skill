@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: 0BSD
 """Export Apple Voice Memos cloud recordings to CSV."""
 
 import argparse
