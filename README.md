@@ -6,7 +6,7 @@ A Claude skill that lets you list, search, and read transcripts from Apple Voice
 
 - macOS with Voice Memos iCloud sync enabled
 - Python 3
-- Claude / Claude Code with the right subscription
+- Claude Code or Claude Desktop with the right subscription
 
 ## Installation
 
@@ -59,6 +59,26 @@ Search for memos with "standup" in the title from the last 7 days:
 
 After listing memos, you can ask Claude to fetch the transcript of any specific memo, summarize it, or search across transcripts.
 
+## Environment Compatibility
+
+This skill works differently depending on your environment:
+
+### Claude Code (Local macOS)
+- **Full functionality**: List all recordings, search by date/title, bulk processing
+- **Direct filesystem access**: Reads from `~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/`
+- **Database queries**: Can query CloudRecordings.db for metadata and filtering
+- **Ideal for**: Working with multiple recordings, searching through your entire Voice Memos library
+
+### Claude Desktop
+- **Limited functionality**: Single-file transcript extraction only
+- **No filesystem access**: Runs in a Linux container, cannot access your Mac's files directly
+- **Manual upload required**: You need to upload individual .m4a files
+- **How to use**:
+  1. Find your Voice Memo files on your Mac at: `~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/`
+  2. Upload a .m4a file to Claude Desktop
+  3. Claude will extract and display the transcript (if available)
+- **Ideal for**: Extracting transcripts from specific Voice Memo files
+
 ## How It Works
 
 The skill reads from the local iCloud-synced Voice Memos storage at:
@@ -69,8 +89,8 @@ The skill reads from the local iCloud-synced Voice Memos storage at:
 
 It uses two tools:
 
-- **extract-apple-voice-memos-metadata** - Queries the `CloudRecordings.db` SQLite database (read-only) to list recording titles, dates, and filenames.
-- **extract-apple-voice-memos-transcript** - Extracts transcript text from the `tsrp` atom embedded in `.m4a` files by Apple's on-device transcription.
+- **extract-apple-voice-memos-metadata** - Queries the `CloudRecordings.db` SQLite database (read-only) to list recording titles, dates, and filenames. (Claude Code only)
+- **extract-apple-voice-memos-transcript** - Extracts transcript text from the `tsrp` atom embedded in `.m4a` files by Apple's on-device transcription. (Both environments)
 
 No audio is processed or sent anywhere. The database is opened in read-only mode. Transcripts are extracted locally from the file metadata - not all recordings will have transcripts, as Apple generates them on-device.
 

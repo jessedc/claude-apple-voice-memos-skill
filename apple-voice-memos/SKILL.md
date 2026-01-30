@@ -33,7 +33,15 @@ Voice Memos must be synced with iCloud. The recordings directory is:
 ~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/
 ```
 
-Before doing anything else, verify this directory exists using `ls`. If it does not exist, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
+## Environment Detection
+
+First, determine which environment you're running in:
+
+1. **Check for local filesystem access**: Try `ls ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/`
+   - If successful → You're in **Claude Code** (local macOS) → Continue with full workflow below
+   - If failed → You're in **Claude Desktop** (Linux container) → Skip to Claude Desktop Workflow section
+
+Before doing anything else in Claude Code, verify this directory exists using `ls`. If it does not exist, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
 
 ## Tools
 
@@ -60,7 +68,40 @@ Extracts the transcript embedded in a Voice Memo `.m4a` file. Apple stores trans
 
 - `ZPATH` contains only the filename (e.g., `20260127 132931-409ABD3B.m4a`), not a full path. The full path is constructed by joining the Recordings directory with the filename.
 
-## Workflow
+## Claude Desktop Workflow (Container Environment)
+
+If you're running in Claude Desktop (detected by lack of local filesystem access):
+
+### Understanding the Limitations
+
+Claude Desktop runs in a Linux container without access to your Mac's filesystem. However, you can still extract transcripts from individual Voice Memo files.
+
+### How to Extract Transcripts in Claude Desktop
+
+1. **Locate your Voice Memo files on your Mac**:
+   ```
+   ~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/
+   ```
+   Your .m4a files are stored here with names like `20260127 132931-409ABD3B.m4a`
+
+2. **Upload a Voice Memo file**:
+   - Tell the user: "Please upload a Voice Memo .m4a file and I'll extract its transcript"
+   - Files will appear in `/mnt/user-data/uploads/`
+
+3. **Extract the transcript**:
+   ```bash
+   python3 /mnt/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "/mnt/user-data/uploads/<FILENAME>" --text
+   ```
+
+4. **Present the results**:
+   - Display the transcript if found
+   - If no transcript exists (tsrp atom not found), inform the user that this recording doesn't have an embedded transcript
+
+**Note**: In Claude Desktop, database queries and bulk processing are not available. Focus on single-file transcript extraction.
+
+## Claude Code Workflow (Local macOS)
+
+If you're running in Claude Code with local filesystem access, use the full workflow:
 
 ### Step 1: Fetch recording metadata
 
@@ -109,6 +150,12 @@ Handle these naturally using the tools above.
 
 ## Error Handling
 
+### Claude Desktop (Container Environment)
+- **Recordings directory not found**: Explain that Claude Desktop runs in a container without local filesystem access. Guide the user to upload individual .m4a files from `~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/` on their Mac.
+- **No file uploaded**: Ask the user to upload a Voice Memo .m4a file for transcript extraction.
+- **Transcript not available**: Tell the user the recording does not have an embedded transcript. Apple generates transcripts on-device and not all recordings will have one.
+
+### Claude Code (Local macOS)
 - **Recordings directory not found**: Tell the user Voice Memos iCloud sync is not enabled or the recordings have not synced to this Mac.
 - **Database not found**: Tell the user the CloudRecordings.db file is missing - Voice Memos may not have synced yet.
 - **No recordings found**: Tell the user no recordings were found in the specified date range. Suggest increasing the `days:` parameter.
