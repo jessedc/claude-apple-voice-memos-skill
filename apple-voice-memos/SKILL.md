@@ -1,7 +1,6 @@
 ---
 name: apple-voice-memos
 description: Fetch metadata and transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memos.
-user-invocable: true
 argument-hint: "[days:<number>] [search:<text>]"
 allowed-tools: Bash(python3:*), Bash(ls:*)
 ---
@@ -9,6 +8,8 @@ allowed-tools: Bash(python3:*), Bash(ls:*)
 # Apple Voice Memos
 
 Fetch metadata and transcripts from Apple Voice Memos synced via iCloud.
+
+User arguments: $ARGUMENTS
 
 ## Arguments
 
@@ -29,6 +30,31 @@ Voice Memos must be synced with iCloud. The recordings directory is:
 
 Before doing anything else, verify this directory exists using `ls`. If it does not exist, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
 
+## Tools
+
+This skill includes two helper tools in its `tools/` directory.
+
+### `extract-apple-voice-memos-metadata`
+
+Extracts recording metadata (title, date, filename) from the CloudRecordings.db SQLite database.
+
+- Outputs CSV to stdout with columns: `title`, `date`, `path`
+- `-d DAYS` controls how far back to look (default: 30 days)
+- Dates are converted from Core Data epoch (seconds since 2001-01-01) to ISO 8601
+- The database is opened in read-only mode (`?mode=ro`)
+
+### `extract-apple-voice-memos-transcript`
+
+Extracts the transcript embedded in a Voice Memo `.m4a` file. Apple stores transcripts in a proprietary `tsrp` atom inside the m4a container.
+
+- Default output is `--text` (plain text transcript)
+- Not all recordings have transcripts; the tool will exit with an error if no `tsrp` atom is found
+- Only Python 3 standard library is required (no dependencies)
+
+### Important notes
+
+- `ZPATH` contains only the filename (e.g., `20260127 132931-409ABD3B.m4a`), not a full path. The full path is constructed by joining the Recordings directory with the filename.
+
 ## Workflow
 
 ### Step 1: Fetch recording metadata
@@ -36,7 +62,7 @@ Before doing anything else, verify this directory exists using `ls`. If it does 
 Run the metadata extraction tool to list recent recordings:
 
 ```bash
-python3 $SKILL_DIR/tools/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d <DAYS>
+python3 ~/.claude/skills/apple-voice-memos/tools/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d <DAYS>
 ```
 
 Where `<DAYS>` is the number of days from the `days:` argument (default 30).
@@ -59,7 +85,7 @@ Display the recordings in a clear table or list format showing:
 If the user asked for a transcript of a specific memo, or if there is only one result, fetch the transcript:
 
 ```bash
-python3 $SKILL_DIR/tools/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --text
+python3 ~/.claude/skills/apple-voice-memos/tools/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --text
 ```
 
 Where `<FILENAME>` is the `path` value from the metadata CSV.
