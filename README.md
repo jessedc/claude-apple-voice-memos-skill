@@ -74,6 +74,11 @@ It uses two tools:
 
 No audio is processed or sent anywhere. The database is opened in read-only mode. Transcripts are extracted locally from the file metadata - not all recordings will have transcripts, as Apple generates them on-device.
 
+## Further Reading
+
+- [Unlocking Apple Voice Memo Transcripts](https://thomascountz.com/2025/06/08/unlocking-apple-voice-memo-transcripts) by Thomas Countz
+- [CloudRecordings.db Details](CloudRecordings-db-details.md) - Schema and query reference for the Voice Memos database
+
 ## Acknowledgements
 
 The transcript extraction tool (`extract-apple-voice-memos-transcript`) is by [Tomoki Aonuma](https://github.com/uasi), licensed under the [BSD Zero Clause License](https://opensource.org/license/0bsd). Source: [uasi/extract-apple-voice-memos-transcript](https://github.com/uasi/extract-apple-voice-memos-transcript).
