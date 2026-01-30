@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: 0BSD
+# Copyright (c) 2025 Tomoki Aonuma
+# Source: https://github.com/uasi/extract-apple-voice-memos-transcript
+
+import argparse
+import json
+import struct
+import sys
+
+
+def read_atom_header(f):
+    header = f.read(8)
+    if len(header) < 8:
+        return None, None, 0
+
+    size = struct.unpack(">I", header[:4])[0]
+    atom_type = header[4:8].decode("ascii", errors="ignore")
+
+    if size == 1:
+        extended_size = struct.unpack(">Q", f.read(8))[0]
+        return atom_type, extended_size, 16
+
+    return atom_type, size, 8
+
+
+def find_atom(f, end_pos, target_type):
+    while f.tell() < end_pos:
+        current_pos = f.tell()
+        atom_type, atom_size, header_size = read_atom_header(f)
+
+        if atom_type is None or atom_size == 0:
+            break
+
+        atom_end = current_pos + atom_size
+
+        if atom_type == target_type:
+            return atom_end, header_size
+        else:
+            f.seek(atom_end)
+
+    return None, None
+
+
+def error_exit(message):
+    print(message, file=sys.stderr)
+    sys.exit(1)
+
+
+def process_m4a_file(filename, mode):
+    with open(filename, "rb") as f:
+        file_size = f.seek(0, 2)
+        f.seek(0)
+
+        moov_end, _ = find_atom(f, file_size, "moov")
+        if not moov_end:
+            error_exit("error: 'moov' atom not found")
+
+        trak_end, _ = find_atom(f, moov_end, "trak")
+        if not trak_end:
+            error_exit("error: 'trak' atom not found")
+
+        udta_end, _ = find_atom(f, trak_end, "udta")
+        if not udta_end:
+            error_exit("error: 'udta' atom not found")
+
+        tsrp_end, header_size = find_atom(f, udta_end, "tsrp")
+        if not tsrp_end:
+            error_exit("error: 'tsrp' atom not found")
+
+        current_pos = f.tell()
+        data_size = tsrp_end - current_pos
+        tsrp_data = f.read(data_size)
+
+        if mode == "raw":
+            sys.stdout.buffer.write(tsrp_data)
+            return
+
+        json_obj = {}
+        try:
+            json_obj = json.loads(tsrp_data.decode("utf-8"))
+        except Exception:
+            error_exit("error: could not parse transcript data")
+
+        if mode == "json":
+            json.dump(json_obj, sys.stdout, ensure_ascii=False, separators=(",", ":"))
+            print()
+            return
+
+        printed = False
+        attributedString = json_obj.get("attributedString")
+        if isinstance(attributedString, list):
+            for item in attributedString:
+                if isinstance(item, str):
+                    print(item, end="")
+                    printed = True
+        elif isinstance(attributedString, dict):
+            for item in attributedString.get("runs", []):
+                if isinstance(item, str):
+                    print(item, end="")
+                    printed = True
+        if printed:
+            print()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Extract transcript data from Apple Voice Memos .m4a files."
+    )
+    parser.add_argument("filename", help="path to the .m4a file")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--text", action="store_true", help="print transcript as plain text (default)"
+    )
+    group.add_argument(
+        "--json", action="store_true", help="print transcript data as JSON"
+    )
+    group.add_argument("--raw", action="store_true", help="print raw transcript data")
+    args = parser.parse_args()
+
+    if args.json:
+        mode = "json"
+    elif args.raw:
+        mode = "raw"
+    else:
+        mode = "text"
+
+    process_m4a_file(args.filename, mode=mode)
