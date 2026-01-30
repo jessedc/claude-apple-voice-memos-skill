@@ -6,7 +6,7 @@ A Claude skill that lets you list, search, and read transcripts from Apple Voice
 
 - macOS with Voice Memos iCloud sync enabled
 - Python 3
-- Claude Code
+- Claude / Claude Code with the right subscription
 
 ## Installation
 

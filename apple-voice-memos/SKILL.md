@@ -1,10 +1,11 @@
 ---
 name: apple-voice-memos
-description: Fetch metadata and transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memo
+description: Fetch metadata and transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memos.
 allowed-tools: Bash(python3:*), Bash(ls:*)
+compatibility: macOS with Voice Memos iCloud sync enable, Python 3
 license: 0BSD
 metadata:
-  version: "1.0.0"
+  version: "0.1.0"
   author: "Jesse Collis <jesse@jessedc.dev>"
 
 ---
