@@ -1,8 +1,12 @@
 ---
 name: apple-voice-memos
-description: Fetch metadata and transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memos.
-argument-hint: "[days:<number>] [search:<text>]"
+description: Fetch metadata and transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memo
 allowed-tools: Bash(python3:*), Bash(ls:*)
+license: 0BSD
+metadata:
+  version: "1.0.0"
+  author: "Jesse Collis <jesse@jessedc.dev>"
+
 ---
 
 # Apple Voice Memos
@@ -32,7 +36,7 @@ Before doing anything else, verify this directory exists using `ls`. If it does 
 
 ## Tools
 
-This skill includes two helper tools in its `tools/` directory.
+This skill includes two helper tools in its `scripts/` directory.
 
 ### `extract-apple-voice-memos-metadata`
 
@@ -62,7 +66,7 @@ Extracts the transcript embedded in a Voice Memo `.m4a` file. Apple stores trans
 Run the metadata extraction tool to list recent recordings:
 
 ```bash
-python3 ~/.claude/skills/apple-voice-memos/tools/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d <DAYS>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d <DAYS>
 ```
 
 Where `<DAYS>` is the number of days from the `days:` argument (default 30).
@@ -85,7 +89,7 @@ Display the recordings in a clear table or list format showing:
 If the user asked for a transcript of a specific memo, or if there is only one result, fetch the transcript:
 
 ```bash
-python3 ~/.claude/skills/apple-voice-memos/tools/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --text
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --text
 ```
 
 Where `<FILENAME>` is the `path` value from the metadata CSV.
