@@ -47,6 +47,105 @@ def error_exit(message):
     sys.exit(1)
 
 
+def format_timestamp(seconds):
+    """Format seconds into [H:MM:SS] or [M:SS] format."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    
+    if hours > 0:
+        return f"[{hours}:{minutes:02d}:{secs:02d}]"
+    else:
+        return f"[{minutes}:{secs:02d}]"
+
+
+def extract_text_with_timestamps(json_obj):
+    """Extract text segments with their timestamps from the JSON object."""
+    segments = []
+    
+    # Check if we have attributedString
+    attributed_string = json_obj.get("attributedString")
+    
+    if isinstance(attributed_string, list):
+        # Interleaved format: text and time attributes mixed in array
+        current_time = 0
+        for i, item in enumerate(attributed_string):
+            if isinstance(item, str):
+                # Look for the next item which might contain timeRange
+                time_info = None
+                if i + 1 < len(attributed_string) and isinstance(attributed_string[i + 1], dict):
+                    time_range = attributed_string[i + 1].get("timeRange")
+                    if time_range and isinstance(time_range, list) and len(time_range) >= 1:
+                        current_time = time_range[0]
+                        time_info = current_time
+                
+                if time_info is not None:
+                    segments.append((time_info, item))
+                elif segments:  # Use the last known time if no new time info
+                    segments.append((current_time, item))
+                else:
+                    segments.append((0, item))
+                    
+    elif isinstance(attributed_string, dict):
+        # Separated format: attributeTable contains time ranges, runs contains text
+        runs = attributed_string.get("runs", [])
+        attribute_table = attributed_string.get("attributeTable", [])
+        
+        current_time = 0
+        for i in range(0, len(runs), 2):
+            if i < len(runs):
+                text = runs[i] if isinstance(runs[i], str) else ""
+                
+                # Get attribute index if available
+                if i + 1 < len(runs) and isinstance(runs[i + 1], int):
+                    attr_index = runs[i + 1]
+                    # attributeTable is a list, use index directly
+                    if isinstance(attribute_table, list) and 0 <= attr_index < len(attribute_table):
+                        time_range = attribute_table[attr_index].get("timeRange")
+                        if time_range and isinstance(time_range, list) and len(time_range) >= 1:
+                            current_time = time_range[0]
+                
+                segments.append((current_time, text))
+    
+    if not segments:
+        return ""
+    
+    # Group segments into lines - aggregate text that's close in time
+    # Consider segments within 15 seconds as part of the same line
+    lines = []
+    current_line_time = segments[0][0]
+    current_line_text = []
+    
+    for time, text in segments:
+        if text.strip():
+            # Start a new line if there's a significant time gap (> 15 seconds) or punctuation suggests a break
+            if (time - current_line_time > 15 or 
+                (current_line_text and current_line_text[-1].rstrip().endswith(('.', '!', '?')))):
+                if current_line_text:
+                    lines.append((current_line_time, ''.join(current_line_text)))
+                current_line_time = time
+                current_line_text = [text]
+            else:
+                current_line_text.append(text)
+    
+    # Add the last line
+    if current_line_text:
+        lines.append((current_line_time, ''.join(current_line_text)))
+    
+    # Check if we need hours format (if any timestamp >= 3600 seconds)
+    max_time = max((t for t, _ in lines), default=0)
+    
+    # Format and combine lines
+    result = []
+    for time, text in lines:
+        text = text.strip()
+        if text:
+            timestamp = format_timestamp(time)
+            result.append(f"{timestamp} {text}")
+    
+    return "\n".join(result)
+
+
 def process_m4a_file(filename, mode):
     with open(filename, "rb") as f:
         file_size = f.seek(0, 2)
@@ -86,6 +185,12 @@ def process_m4a_file(filename, mode):
             json.dump(json_obj, sys.stdout, ensure_ascii=False, separators=(",", ":"))
             print()
             return
+        
+        if mode == "timestamps":
+            result = extract_text_with_timestamps(json_obj)
+            if result:
+                print(result)
+            return
 
         printed = False
         attributedString = json_obj.get("attributedString")
@@ -116,12 +221,17 @@ if __name__ == "__main__":
         "--json", action="store_true", help="print transcript data as JSON"
     )
     group.add_argument("--raw", action="store_true", help="print raw transcript data")
+    group.add_argument(
+        "--timestamps", action="store_true", help="print transcript with timestamps"
+    )
     args = parser.parse_args()
 
     if args.json:
         mode = "json"
     elif args.raw:
         mode = "raw"
+    elif args.timestamps:
+        mode = "timestamps"
     else:
         mode = "text"
 
