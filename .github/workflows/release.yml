@@ -87,11 +87,18 @@ jobs:
             
             ### Installation
             
+            #### Option 1: Claude Code Installation
             1. Download the `apple-voice-memos-${{ steps.get_version.outputs.VERSION }}.zip` file below
             2. Extract the archive
             3. Copy the `apple-voice-memos` directory to your Claude skills directory:
               - **Personal scope:** `~/.claude/skills/apple-voice-memos`
               - **Project scope:** `/path/to/project/.claude/skills/apple-voice-memos`
+            
+            #### Option 2: Direct Upload to Claude
+            1. Download the `apple-voice-memos-${{ steps.get_version.outputs.VERSION }}.zip` file below
+            2. Open Claude (claude.ai)
+            3. Upload the zip file directly to Claude
+            4. Claude will automatically install the skill for your current project
             
             ### What's Changed
             ${{ steps.release_notes.outputs.NOTES }}
