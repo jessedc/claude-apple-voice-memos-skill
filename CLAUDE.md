@@ -11,7 +11,7 @@ This is a Claude skill that provides access to Apple Voice Memos synced via iClo
 The project consists of:
 - **Skill definition**: `apple-voice-memos/SKILL.md` - Defines the skill's capabilities, arguments, and workflow
 - **Python scripts**: Located in `apple-voice-memos/scripts/`
-  - `extract-apple-voice-memos-metadata`: Queries the CloudRecordings.db SQLite database for recording metadata
+  - `extract-apple-voice-memos-metadata`: Queries the CloudRecordings.db SQLite database for recording metadata (title, date, duration, filename)
   - `extract-apple-voice-memos-transcript`: Extracts embedded transcripts from .m4a files using the proprietary `tsrp` atom format
 
 ## Key Technical Details
@@ -31,6 +31,11 @@ The skill behaves differently in two environments:
 - **Claude Desktop (Linux container)**: Limited to single-file transcript extraction via uploads
 
 ## Recent Updates
+
+### Duration in Metadata (2026-02-01)
+- Added `ZDURATION` to the metadata extraction query
+- Duration formatted as `M:SS` or `H:MM:SS` for recordings over an hour
+- CSV output now includes `duration` column between `date` and `path`
 
 ### Timestamps Support (2026-01-31)
 - Added `--timestamps` option to transcript extraction tool

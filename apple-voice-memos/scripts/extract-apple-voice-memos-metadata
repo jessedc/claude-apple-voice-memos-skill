@@ -12,11 +12,22 @@ from datetime import datetime, timezone, timedelta
 CORE_DATA_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)
 
 QUERY = """
-SELECT ZENCRYPTEDTITLE, ZDATE, ZPATH
+SELECT ZENCRYPTEDTITLE, ZDATE, ZDURATION, ZPATH
 FROM ZCLOUDRECORDING
 WHERE ZDATE >= ?
 ORDER BY ZDATE DESC
 """
+
+
+def format_duration(seconds):
+    if seconds is None:
+        return ""
+    total = int(seconds)
+    h, remainder = divmod(total, 3600)
+    m, s = divmod(remainder, 60)
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
 
 
 def core_data_to_iso8601(timestamp):
@@ -43,9 +54,9 @@ def main():
 
     out = open(args.output, "w", newline="") if args.output != "-" else sys.stdout
     writer = csv.writer(out)
-    writer.writerow(["title", "date", "path"])
-    for title, date, path in rows:
-        writer.writerow([title, core_data_to_iso8601(date), path])
+    writer.writerow(["title", "date", "duration", "path"])
+    for title, date, duration, path in rows:
+        writer.writerow([title, core_data_to_iso8601(date), format_duration(duration), path])
 
     if out is not sys.stdout:
         out.close()

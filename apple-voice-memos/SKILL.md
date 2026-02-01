@@ -49,9 +49,10 @@ This skill includes two helper tools in its `scripts/` directory.
 
 ### `extract-apple-voice-memos-metadata`
 
-Extracts recording metadata (title, date, filename) from the CloudRecordings.db SQLite database.
+Extracts recording metadata (title, date, duration, filename) from the CloudRecordings.db SQLite database.
 
-- Outputs CSV to stdout with columns: `title`, `date`, `path`
+- Outputs CSV to stdout with columns: `title`, `date`, `duration`, `path`
+- Duration is formatted as `M:SS` or `H:MM:SS` for longer recordings
 - `-d DAYS` controls how far back to look (default: 30 days)
 - Dates are converted from Core Data epoch (seconds since 2001-01-01) to ISO 8601
 - The database is opened in read-only mode (`?mode=ro`)
@@ -114,7 +115,7 @@ python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-met
 
 Where `<DAYS>` is the number of days from the `days:` argument (default 30).
 
-This outputs CSV with columns: `title`, `date`, `path`
+This outputs CSV with columns: `title`, `date`, `duration`, `path`
 
 ### Step 2: Apply search filter (if provided)
 
@@ -125,6 +126,7 @@ If the user specified `search:<text>`, filter the results to only include rows w
 Display the recordings in a clear table or list format showing:
 - Title
 - Date (formatted readably)
+- Duration
 - Filename
 
 ### Step 4: Fetch transcripts (on request or automatically)
