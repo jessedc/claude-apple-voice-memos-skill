@@ -47,10 +47,7 @@ jobs:
           
           # Change to temp directory and create the zip
           cd release-temp
-          zip -r ../apple-voice-memos-${{ steps.get_version.outputs.VERSION }}.zip apple-voice-memos \
-            --exclude="*.DS_Store" \
-            --exclude="*__pycache__*" \
-            --exclude="*.pyc"
+          zip -r ../apple-voice-memos-${{ steps.get_version.outputs.VERSION }}.zip apple-voice-memos
           
           # Clean up temp directory
           cd ..
