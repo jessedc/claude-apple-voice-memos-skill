@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  # Automatic trigger when tags are pushed
+  push:
+    tags:
+      - 'v*' # Match tags like v0.1.0, v1.0.0, etc.
+  
+  # Manual trigger with version input
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v0.1.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Required for creating releases
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get version from tag or input
+        id: get_version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=${{ github.event.inputs.version }}
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Creating release for version: $VERSION"
+      
+      - name: Create archive with proper structure
+        run: |
+          # Create a temporary directory for the archive
+          mkdir -p release-temp
+          
+          # Copy the apple-voice-memos directory maintaining structure
+          cp -r apple-voice-memos release-temp/
+          
+          # Change to temp directory and create the zip
+          cd release-temp
+          zip -r ../apple-voice-memos-${{ steps.get_version.outputs.VERSION }}.zip apple-voice-memos
+          
+          # Clean up temp directory
+          cd ..
+          rm -rf release-temp
+          
+          # Verify the archive structure
+          echo "Archive contents:"
+          unzip -l apple-voice-memos-${{ steps.get_version.outputs.VERSION }}.zip | head -20
+      
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          # Get the previous tag for comparison
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [[ -z "$PREVIOUS_TAG" ]]; then
+            echo "NOTES=Initial release of the Apple Voice Memos Claude skill." >> $GITHUB_OUTPUT
+          else
+            # Generate commit list since last tag
+            echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+            echo "## Changes since $PREVIOUS_TAG" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          name: Apple Voice Memos Skill ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Apple Voice Memos Claude Skill ${{ steps.get_version.outputs.VERSION }}
+            
+            A Claude skill that lets you list, search, and read transcripts from Apple Voice Memos synced via iCloud.
+            
+            ### Installation
+            
+            #### Option 1: Claude Code Installation
+            1. Download the `apple-voice-memos-${{ steps.get_version.outputs.VERSION }}.zip` file below
+            2. Extract the archive
+            3. Copy the `apple-voice-memos` directory to your Claude skills directory:
+              - **Personal scope:** `~/.claude/skills/apple-voice-memos`
+              - **Project scope:** `/path/to/project/.claude/skills/apple-voice-memos`
+            
+            #### Option 2: Direct Upload to Claude
+            1. Download the `apple-voice-memos-${{ steps.get_version.outputs.VERSION }}.zip` file below
+            2. Open Claude (claude.ai)
+            3. Upload the zip file directly to Claude
+            4. Claude will automatically install the skill for your current project
+            
+            ### What's Changed
+            ${{ steps.release_notes.outputs.NOTES }}
+            
+            ### Usage
+            Once installed, use the skill with:
+            ```
+            /apple-voice-memos
+            ```
+            
+            See the [README](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/README.md) for detailed usage instructions.
+          files: |
+            apple-voice-memos-${{ steps.get_version.outputs.VERSION }}.zip
+          draft: false
+          prerelease: ${{ contains(steps.get_version.outputs.VERSION, '-') }}
+          generate_release_notes: false  # We're generating our own
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Clean up artifacts
+        if: always()
+        run: |
+          rm -f apple-voice-memos-*.zip
