@@ -5,6 +5,7 @@
 
 import argparse
 import json
+import re
 import struct
 import sys
 
@@ -59,6 +60,70 @@ def format_timestamp(seconds):
         return f"[{minutes}:{secs:02d}]"
 
 
+def should_break_line(current_text, next_text, time_gap, word_count):
+    """Determine if a line break should occur based on multiple factors."""
+    # Configuration constants
+    MIN_GAP_FOR_BREAK = 2.0  # seconds between segments (increased for better grouping)
+    MAX_GAP_FOR_BREAK = 4.0  # definitely break if gap is this large
+    TARGET_WORDS = 15
+    MAX_WORDS = 30  # Allow longer lines to avoid fragmentation
+    MIN_WORDS = 5   # Require more words before breaking
+    
+    # Very long gap always breaks (unless line is too short)
+    if time_gap >= MAX_GAP_FOR_BREAK and word_count >= MIN_WORDS:
+        return True
+    
+    # Strong punctuation breaks only if we have enough words
+    if current_text and current_text.rstrip().endswith(('.', '!', '?')):
+        return word_count >= MIN_WORDS
+    
+    # Check for natural break points with moderate gaps
+    if time_gap >= MIN_GAP_FOR_BREAK and word_count >= MIN_WORDS:
+        # Break at natural pauses (commas, semicolons) if line is getting long
+        if word_count >= TARGET_WORDS and current_text and current_text.rstrip().endswith((',', ';', ':')):
+            return True
+        
+        # Break after conjunctions if line is long enough
+        conjunctions = ['and', 'but', 'so', 'because', 'when', 'if', 'that', 'which']
+        last_word = current_text.rstrip().split()[-1].lower().rstrip('.,;:') if current_text else ''
+        if word_count >= TARGET_WORDS and last_word in conjunctions:
+            return True
+    
+    # Force break if line is too long
+    if word_count >= MAX_WORDS:
+        return True
+    
+    # Don't break very short lines
+    if word_count < MIN_WORDS:
+        return False
+    
+    return False
+
+
+def clean_disfluencies(text):
+    """Clean up common speech disfluencies while preserving meaning."""
+    # Remove extra spaces and normalize
+    text = ' '.join(text.split())
+    
+    # Handle "word, word" repetitions (e.g., "I'm, I'm" -> "I'm")
+    # Pattern: word followed by comma and space, then same word
+    pattern = r"\b(\w+['']?\w*),\s+\1\b"
+    text = re.sub(pattern, r'\1', text, flags=re.IGNORECASE)
+    
+    # Handle "I I" or "the the" type repetitions
+    pattern = r'\b(\w+)\s+\1\b'
+    text = re.sub(pattern, r'\1', text, flags=re.IGNORECASE)
+    
+    # Clean up spacing around punctuation
+    text = re.sub(r'\s+([.,;:!?])', r'\1', text)  # Remove space before punctuation
+    text = re.sub(r'([.,;:!?])([^\s])', r'\1 \2', text)  # Add space after punctuation if missing
+    
+    # Remove trailing commas that indicate interruptions
+    text = re.sub(r',\s*$', '', text)
+    
+    return text.strip()
+
+
 def extract_text_with_timestamps(json_obj):
     """Extract text segments with their timestamps from the JSON object."""
     segments = []
@@ -110,30 +175,46 @@ def extract_text_with_timestamps(json_obj):
     if not segments:
         return ""
     
-    # Group segments into lines - aggregate text that's close in time
-    # Consider segments within 15 seconds as part of the same line
+    # Group segments into lines with improved logic
     lines = []
     current_line_time = segments[0][0]
     current_line_text = []
+    prev_segment_time = segments[0][0]
     
     for time, text in segments:
         if text.strip():
-            # Start a new line if there's a significant time gap (> 15 seconds) or punctuation suggests a break
-            if (time - current_line_time > 15 or 
-                (current_line_text and current_line_text[-1].rstrip().endswith(('.', '!', '?')))):
-                if current_line_text:
-                    lines.append((current_line_time, ''.join(current_line_text)))
+            # Calculate gap from previous segment (not from line start)
+            time_gap = time - prev_segment_time
+            
+            # Count words in current line
+            current_words = ' '.join(current_line_text).split()
+            word_count = len(current_words)
+            
+            # Determine if we should break the line
+            if current_line_text and should_break_line(
+                ' '.join(current_line_text), 
+                text, 
+                time_gap, 
+                word_count
+            ):
+                # Clean and add the completed line
+                line_text = ' '.join(current_line_text)
+                line_text = clean_disfluencies(line_text)
+                if line_text.strip():
+                    lines.append((current_line_time, line_text))
                 current_line_time = time
                 current_line_text = [text]
             else:
                 current_line_text.append(text)
+            
+            prev_segment_time = time
     
     # Add the last line
     if current_line_text:
-        lines.append((current_line_time, ''.join(current_line_text)))
-    
-    # Check if we need hours format (if any timestamp >= 3600 seconds)
-    max_time = max((t for t, _ in lines), default=0)
+        line_text = ' '.join(current_line_text)
+        line_text = clean_disfluencies(line_text)
+        if line_text.strip():
+            lines.append((current_line_time, line_text))
     
     # Format and combine lines
     result = []
