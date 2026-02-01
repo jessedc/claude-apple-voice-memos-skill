@@ -60,7 +60,8 @@ Extracts recording metadata (title, date, filename) from the CloudRecordings.db 
 
 Extracts the transcript embedded in a Voice Memo `.m4a` file. Apple stores transcripts in a proprietary `tsrp` atom inside the m4a container.
 
-- Default output is `--text` (plain text transcript)
+- **IMPORTANT**: Always use the `--timestamps` flag to include time markers in the output
+- The `--timestamps` option shows when each segment was spoken in `[M:SS]` or `[H:MM:SS]` format
 - Not all recordings have transcripts; the tool will exit with an error if no `tsrp` atom is found
 - Only Python 3 standard library is required (no dependencies)
 
@@ -90,7 +91,7 @@ Claude Desktop runs in a Linux container without access to your Mac's filesystem
 
 3. **Extract the transcript**:
    ```bash
-   python3 /mnt/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "/mnt/user-data/uploads/<FILENAME>" --text
+   python3 /mnt/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "/mnt/user-data/uploads/<FILENAME>" --timestamps
    ```
 
 4. **Present the results**:
@@ -131,7 +132,17 @@ Display the recordings in a clear table or list format showing:
 If the user asked for a transcript of a specific memo, or if there is only one result, fetch the transcript:
 
 ```bash
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --text
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --timestamps
+```
+
+**Note**: Always use `--timestamps` to provide context about when things were said in the recording. This helps users navigate and understand the temporal flow of their voice memos.
+
+Example output with timestamps:
+```
+[0:00] Okay so I've been thinking about the garage project
+[0:15] mainly the electrical panel situation, whether we need to upgrade to 200 amp
+[0:32] actually wait, first thing—I need to call the permit office
+[1:05] back to the panel, the quote from Mike seemed high
 ```
 
 Where `<FILENAME>` is the `path` value from the metadata CSV.
