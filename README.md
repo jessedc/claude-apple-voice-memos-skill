@@ -57,7 +57,16 @@ Search for memos with "standup" in the title from the last 7 days:
 /apple-voice-memos days:7 search:standup
 ```
 
-After listing memos, you can ask Claude to fetch the transcript of any specific memo, summarize it, or search across transcripts.
+After listing memos, you can ask Claude to fetch the transcript of any specific memo, summarize it, or search across transcripts. Transcripts will include timestamps showing when each segment was spoken:
+
+```
+[0:00] Okay so I've been thinking about the garage project
+[0:15] mainly the electrical panel situation, whether we need to upgrade to 200 amp
+[0:32] actually wait, first thing—I need to call the permit office
+[1:05] back to the panel, the quote from Mike seemed high
+[3:42] totally different thing but I should look into that thermal printer again
+[5:18] oh on the panel—Sarah mentioned her electrician did something similar
+```
 
 ## Environment Compatibility
 
@@ -91,6 +100,7 @@ It uses two tools:
 
 - **extract-apple-voice-memos-metadata** - Queries the `CloudRecordings.db` SQLite database (read-only) to list recording titles, dates, and filenames. (Claude Code only)
 - **extract-apple-voice-memos-transcript** - Extracts transcript text from the `tsrp` atom embedded in `.m4a` files by Apple's on-device transcription. (Both environments)
+  - **New**: The `--timestamps` option outputs transcripts with time markers in `[M:SS]` or `[H:MM:SS]` format, showing when each segment was spoken in the recording
 
 No audio is processed or sent anywhere. The database is opened in read-only mode. Transcripts are extracted locally from the file metadata - not all recordings will have transcripts, as Apple generates them on-device.
 
