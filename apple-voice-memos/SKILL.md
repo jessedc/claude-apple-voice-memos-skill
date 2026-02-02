@@ -37,11 +37,11 @@ Voice Memos must be synced with iCloud. The recordings directory is:
 
 First, determine which environment you're running in:
 
-1. **Check for local filesystem access**: Try `ls ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/`
+1. **Check for local filesystem access**: Try `ls "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/"`
    - If successful → You're in **Claude Code** (local macOS) → Continue with full workflow below
    - If failed → You're in **Claude Desktop** (Linux container) → Skip to Claude Desktop Workflow section
 
-Before doing anything else in Claude Code, verify this directory exists using `ls`. If it does not exist, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
+Before doing anything else in Claude Code, verify this directory exists using `ls` with `$HOME`. If it does not exist, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
 
 ## Tools
 
