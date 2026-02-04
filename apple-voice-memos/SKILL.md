@@ -54,28 +54,75 @@ This skill includes two helper tools in its `scripts/` directory.
 
 ### `extract-apple-voice-memos-metadata`
 
-Extracts recording metadata (title, date, duration, filename) from the CloudRecordings.db SQLite database.
+Queries the CloudRecordings.db SQLite database to retrieve recording metadata.
 
-- Outputs CSV to stdout with columns: `title`, `date`, `duration`, `path`
-- Duration is formatted as `M:SS` or `H:MM:SS` for longer recordings
-- `-d DAYS` controls how far back to look (default: 30 days)
-- Dates are converted from Core Data epoch (seconds since 2001-01-01) to ISO 8601
-- The database is opened in read-only mode (`?mode=ro`)
+**Output Format:**
+- CSV to stdout with columns: `title`, `date`, `duration`, `path`
+- Duration formatted as `M:SS` or `H:MM:SS` for recordings over an hour
+- Dates converted from Core Data epoch to ISO 8601 format
+- Database opened in read-only mode (`?mode=ro`) for safety
+
+**Date Filtering Options:**
+- `-d, --days N`: Look back N days from today (default: 30)
+- `--since YYYY-MM-DD`: Include recordings since this date
+- `--until YYYY-MM-DD`: Include recordings until this date (use with --since)
+- `--year YYYY`: All recordings from specified year
+- `--month YYYY-MM`: All recordings from specified month
+
+**Usage Examples:**
+```bash
+# Last 7 days
+python3 scripts/extract-apple-voice-memos-metadata "path/to/CloudRecordings.db" -d 7
+
+# Specific month
+python3 scripts/extract-apple-voice-memos-metadata "path/to/CloudRecordings.db" --month 2026-01
+
+# Date range
+python3 scripts/extract-apple-voice-memos-metadata "path/to/CloudRecordings.db" --since 2026-01-01 --until 2026-01-31
+```
 
 ### `extract-apple-voice-memos-transcript`
 
-Extracts the transcript embedded in a Voice Memo `.m4a` file. Apple stores transcripts in a proprietary `tsrp` atom inside the m4a container.
+Extracts embedded transcripts from Voice Memo `.m4a` files using Apple's proprietary `tsrp` atom format.
 
-- **Default output includes timestamps** showing when each segment was spoken in `[M:SS]` or `[H:MM:SS]` format
-- Use `--text` for plain text output without timestamps
-- Filler words (uh, um) are automatically removed for cleaner output
-- Output includes paragraph breaks (blank lines) at topic shifts (6+ second pauses)
-- Not all recordings have transcripts; the tool will exit with an error if no `tsrp` atom is found
-- Only Python 3 standard library is required (no dependencies)
+**Output Modes:**
+- **Default**: Timestamped transcript with `[M:SS]` or `[H:MM:SS]` format
+- `--text`: Plain text without timestamps
+- `--json`: Raw JSON data structure
+- `--raw`: Binary tsrp atom data
 
-### Important notes
+**Features:**
+- Automatic removal of filler words (uh, um) for cleaner LLM consumption
+- Intelligent line breaking based on sentence boundaries and pauses
+- Paragraph breaks (blank lines) at natural topic shifts (6+ second gaps)
+- False start detection and cleanup ("I went to I went to" → "I went to")
+- Removal of Apple's pause markers (ellipsis artifacts)
 
-- `ZPATH` contains only the filename (e.g., `20260127 132931-409ABD3B.m4a`), not a full path. The full path is constructed by joining the Recordings directory with the filename.
+**Usage Examples:**
+```bash
+# Default (with timestamps)
+python3 scripts/extract-apple-voice-memos-transcript "recording.m4a"
+
+# Plain text only
+python3 scripts/extract-apple-voice-memos-transcript "recording.m4a" --text
+
+# Debug JSON structure
+python3 scripts/extract-apple-voice-memos-transcript "recording.m4a" --json
+```
+
+**Error Handling:**
+- Exit with error if no `tsrp` atom found (not all recordings have transcripts)
+- Transcripts are generated on-device by Apple and may not be available for:
+  - Recordings made before transcript feature was enabled
+  - Recordings in unsupported languages
+  - Very short recordings
+
+### Important Notes
+
+- `ZPATH` from the database contains only the filename (e.g., `20260127 132931-409ABD3B.m4a`)
+- Full path must be constructed by joining the Recordings directory with the filename
+- Both tools require only Python 3 standard library (no external dependencies)
+- Tools are designed to be read-only and safe to run repeatedly
 
 ## Claude Desktop Workflow (Container Environment)
 
