@@ -63,17 +63,15 @@ This is a Claude skill project, not a traditional development project. There are
 To test the skill locally:
 ```bash
 # List recent recordings (metadata)
-python3 apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d 30
+python3 apple-voice-memos/scripts/extract-apple-voice-memos-metadata ~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db -d 30
 
 # Extract transcript from a specific file (with timestamps - default)
-python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a"
+python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript ~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a
 
 # Extract transcript without timestamps (text only)
-python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a" --text
+python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript ~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a --text
 ```
 
 ## Important Notes
 
 - The skill uses read-only database access (`?mode=ro` in SQLite connection)
-- All tools are licensed under 0BSD (BSD Zero Clause License)
-- The transcript extraction tool is based on work by Tomoki Aonuma (https://github.com/uasi/extract-apple-voice-memos-transcript)

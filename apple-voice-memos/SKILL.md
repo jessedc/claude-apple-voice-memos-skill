@@ -79,11 +79,11 @@ Voice Memos must be synced with iCloud. The recordings directory is:
 
 First, determine which environment you're running in:
 
-1. **Check for local filesystem access**: Try `ls "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/"`
+1. **Check for local filesystem access**: Try `ls ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/`
    - If successful → You're in **Claude Code** (local macOS) → Continue with full workflow below
    - If failed → You're in **Claude Desktop** (Linux container) → Skip to Claude Desktop Workflow section
 
-Before doing anything else in Claude Code, verify this directory exists using `ls` with `$HOME`. If it does not exist, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
+Before doing anything else in Claude Code, verify this directory exists using `ls` with `~`. If it does not exist, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
 
 ## Tools
 
@@ -231,19 +231,19 @@ Run the metadata extraction tool with the parsed date filtering options:
 
 ```bash
 # Default (last 30 days)
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db"
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db
 
 # With days argument
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d <DAYS>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db -d <DAYS>
 
 # With year argument
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --year <YEAR>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db --year <YEAR>
 
 # With month argument
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --month <YYYY-MM>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db --month <YYYY-MM>
 
 # With date range
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --since <DATE> [--until <DATE>]
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db --since <DATE> [--until <DATE>]
 ```
 
 The tool supports the following date filtering options:
@@ -281,26 +281,15 @@ Fetch transcripts using:
 
 ```bash
 # Default (with timestamps)
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>"
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>
 
 # With text-only flag (plain text without timestamps)
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --text
-```
-
-**Note**: The tool outputs timestamps by default, providing temporal context and automatically removing filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts. When the user includes the `text-only` flag in their arguments, use `--text` to output plain text without timestamps.
-
-Example output with timestamps:
-```
-[0:00] Okay so I've been thinking about the garage project.
-[0:15] Mainly the electrical panel situation, whether we need to upgrade to 200 amp.
-
-[0:32] Actually wait, first thing I need to call the permit office.
-
-[1:05] Back to the panel, the quote from Mike seemed high.
-[1:12] I should get at least two more quotes before deciding.
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript ~/Library/Group\ Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME> --text
 ```
 
 Where `<FILENAME>` is the `path` value from the metadata CSV.
+
+**Note**: The tool outputs timestamps by default, providing temporal context and automatically removing filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts. When the user includes the `text-only` flag in their arguments, use `--text` to output plain text without timestamps.
 
 If the transcript tool exits with an error (e.g., "tsrp atom not found"), inform the user that no transcript is available for that recording. This is normal - not all memos have transcripts (the device must have generated one).
 
