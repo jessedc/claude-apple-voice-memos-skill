@@ -32,6 +32,14 @@ The skill behaves differently in two environments:
 
 ## Recent Updates
 
+### Improved Line-Breaking Algorithm (2026-02-04)
+- Cleaned Apple pause markers (ellipsis artifacts like `. ..`) from output
+- Sentence-ending punctuation is now the primary break signal (matching industry best practices)
+- Added paragraph breaks (blank lines) when time gap between lines exceeds 6 seconds
+- Improved false start detection ("One of my One of my" → "One of my")
+- Added `--clean` flag to remove filler words (uh, um) for cleaner LLM consumption
+- SKILL.md now recommends `--timestamps --clean` as the default
+
 ### Duration in Metadata (2026-02-01)
 - Added `ZDURATION` to the metadata extraction query
 - Duration formatted as `M:SS` or `H:MM:SS` for recordings over an hour
@@ -58,7 +66,10 @@ To test the skill locally:
 # List recent recordings (metadata)
 python3 apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d 30
 
-# Extract transcript from a specific file (with timestamps - recommended)
+# Extract transcript from a specific file (recommended - with timestamps and cleaned)
+python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a" --timestamps --clean
+
+# Extract transcript with timestamps but keep filler words (uh, um)
 python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a" --timestamps
 
 # Extract transcript without timestamps (text only)

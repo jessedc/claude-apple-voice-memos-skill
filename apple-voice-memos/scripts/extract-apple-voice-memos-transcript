@@ -61,76 +61,136 @@ def format_timestamp(seconds):
 
 
 def should_break_line(current_text, next_text, time_gap, word_count):
-    """Determine if a line break should occur based on multiple factors."""
+    """Determine if a line break should occur based on multiple factors.
+
+    Priority order (matching industry best practices):
+    1. Sentence-ending punctuation (.!?) is the primary break signal
+    2. Large time gaps (>= 4s) indicate paragraph-level pauses
+    3. Moderate gaps (>= 2s) with sufficient words break at natural points
+    4. Force break at max word count to prevent runaway lines
+    """
     # Configuration constants
-    MIN_GAP_FOR_BREAK = 2.0  # seconds between segments (increased for better grouping)
-    MAX_GAP_FOR_BREAK = 4.0  # definitely break if gap is this large
-    TARGET_WORDS = 15
-    MAX_WORDS = 30  # Allow longer lines to avoid fragmentation
-    MIN_WORDS = 5   # Require more words before breaking
-    
-    # Very long gap always breaks (unless line is too short)
-    if time_gap >= MAX_GAP_FOR_BREAK and word_count >= MIN_WORDS:
-        return True
-    
-    # Strong punctuation breaks only if we have enough words
+    MIN_GAP_FOR_BREAK = 2.0  # seconds - moderate pause
+    PARAGRAPH_GAP = 4.0      # seconds - definitely break (topic shift)
+    TARGET_WORDS = 12        # aim for this many words per line
+    MAX_WORDS = 25           # force break if line gets this long
+    MIN_WORDS_SENTENCE = 4   # minimum for sentence-ending break
+    MIN_WORDS_PARAGRAPH = 6  # minimum for paragraph break (prevents short fragments)
+
+    # Check if text ends with pause marker (ellipsis) - don't break on these
+    if current_text and current_text.rstrip().endswith('...'):
+        return False
+
+    # Primary signal: sentence-ending punctuation
+    # Always break after .!? as long as we have a minimal sentence
     if current_text and current_text.rstrip().endswith(('.', '!', '?')):
-        return word_count >= MIN_WORDS
-    
-    # Check for natural break points with moderate gaps
-    if time_gap >= MIN_GAP_FOR_BREAK and word_count >= MIN_WORDS:
-        # Break at natural pauses (commas, semicolons) if line is getting long
-        if word_count >= TARGET_WORDS and current_text and current_text.rstrip().endswith((',', ';', ':')):
+        if word_count >= MIN_WORDS_SENTENCE:
             return True
-        
-        # Break after conjunctions if line is long enough
+
+    # Large gap (paragraph-level pause) - require more words to prevent fragments
+    if time_gap >= PARAGRAPH_GAP and word_count >= MIN_WORDS_PARAGRAPH:
+        return True
+
+    # Moderate gap with enough words - break at natural points
+    if time_gap >= MIN_GAP_FOR_BREAK and word_count >= TARGET_WORDS:
+        # Break at commas, semicolons, colons
+        if current_text and current_text.rstrip().endswith((',', ';', ':')):
+            return True
+
+        # Break after conjunctions
         conjunctions = ['and', 'but', 'so', 'because', 'when', 'if', 'that', 'which']
         last_word = current_text.rstrip().split()[-1].lower().rstrip('.,;:') if current_text else ''
-        if word_count >= TARGET_WORDS and last_word in conjunctions:
+        if last_word in conjunctions:
             return True
-    
-    # Force break if line is too long
+
+    # Force break if line is too long (safety net)
     if word_count >= MAX_WORDS:
         return True
-    
-    # Don't break very short lines
-    if word_count < MIN_WORDS:
-        return False
-    
+
     return False
 
 
-def clean_disfluencies(text):
-    """Clean up common speech disfluencies while preserving meaning."""
+def clean_pause_markers(text):
+    """Remove Apple's pause/hesitation markers (ellipsis patterns)."""
+    # Remove ". .." and ". .. .." patterns that result from joining segments
+    text = re.sub(r'\.\s*\.\s*\.+', '', text)
+
+    # Remove standalone "..." or ". ." patterns
+    text = re.sub(r'(?<!\w)\.{2,}', '', text)
+
+    # Remove trailing "..." from words (e.g., "dialogue..." -> "dialogue")
+    text = re.sub(r'\.{3}\s*', ' ', text)
+
+    # Clean up resulting double/multiple spaces
+    text = ' '.join(text.split())
+
+    return text
+
+
+def clean_disfluencies(text, remove_fillers=False):
+    """Clean up common speech disfluencies while preserving meaning.
+
+    Args:
+        text: The text to clean
+        remove_fillers: If True, remove filler words like "uh", "um"
+    """
+    # First clean pause markers
+    text = clean_pause_markers(text)
+
     # Remove extra spaces and normalize
     text = ' '.join(text.split())
-    
+
+    # Handle false starts: "I travelled to I travelled to Asia" -> "I travelled to Asia"
+    # Match 2-5 word phrases that repeat (with or without punctuation/ellipsis between)
+    # Pattern: phrase, optional punctuation/space, same phrase again
+    for phrase_len in range(5, 1, -1):  # Try longer phrases first
+        pattern = r'\b((?:\w+\s+){' + str(phrase_len - 1) + r'}\w+)\s*[.,]*\s*\1\b'
+        text = re.sub(pattern, r'\1', text, flags=re.IGNORECASE)
+
     # Handle "word, word" repetitions (e.g., "I'm, I'm" -> "I'm")
-    # Pattern: word followed by comma and space, then same word
     pattern = r"\b(\w+['']?\w*),\s+\1\b"
     text = re.sub(pattern, r'\1', text, flags=re.IGNORECASE)
-    
+
     # Handle "I I" or "the the" type repetitions
     pattern = r'\b(\w+)\s+\1\b'
     text = re.sub(pattern, r'\1', text, flags=re.IGNORECASE)
-    
+
+    # Remove filler words if requested
+    if remove_fillers:
+        # Remove "uh", "um", "uh...", "um..." including with punctuation
+        text = re.sub(r'\b[Uu]h\.{0,3}\s*', '', text)
+        text = re.sub(r'\b[Uu]m\.{0,3}\s*', '', text)
+        text = re.sub(r',\s*[Uu]h\s*,', ',', text)  # Handle ", uh," patterns
+        text = re.sub(r',\s*[Uu]m\s*,', ',', text)
+
     # Clean up spacing around punctuation
     text = re.sub(r'\s+([.,;:!?])', r'\1', text)  # Remove space before punctuation
     text = re.sub(r'([.,;:!?])([^\s])', r'\1 \2', text)  # Add space after punctuation if missing
-    
+
     # Remove trailing commas that indicate interruptions
     text = re.sub(r',\s*$', '', text)
-    
+
+    # Final cleanup of extra spaces
+    text = ' '.join(text.split())
+
     return text.strip()
 
 
-def extract_text_with_timestamps(json_obj):
-    """Extract text segments with their timestamps from the JSON object."""
+def extract_text_with_timestamps(json_obj, remove_fillers=False):
+    """Extract text segments with their timestamps from the JSON object.
+
+    Args:
+        json_obj: The parsed JSON transcript data
+        remove_fillers: If True, remove filler words (uh, um) from output
+    """
+    # Paragraph break threshold (seconds between lines to insert blank line)
+    PARAGRAPH_GAP_THRESHOLD = 6.0
+
     segments = []
-    
+
     # Check if we have attributedString
     attributed_string = json_obj.get("attributedString")
-    
+
     if isinstance(attributed_string, list):
         # Interleaved format: text and time attributes mixed in array
         current_time = 0
@@ -143,24 +203,24 @@ def extract_text_with_timestamps(json_obj):
                     if time_range and isinstance(time_range, list) and len(time_range) >= 1:
                         current_time = time_range[0]
                         time_info = current_time
-                
+
                 if time_info is not None:
                     segments.append((time_info, item))
                 elif segments:  # Use the last known time if no new time info
                     segments.append((current_time, item))
                 else:
                     segments.append((0, item))
-                    
+
     elif isinstance(attributed_string, dict):
         # Separated format: attributeTable contains time ranges, runs contains text
         runs = attributed_string.get("runs", [])
         attribute_table = attributed_string.get("attributeTable", [])
-        
+
         current_time = 0
         for i in range(0, len(runs), 2):
             if i < len(runs):
                 text = runs[i] if isinstance(runs[i], str) else ""
-                
+
                 # Get attribute index if available
                 if i + 1 < len(runs) and isinstance(runs[i + 1], int):
                     attr_index = runs[i + 1]
@@ -169,65 +229,72 @@ def extract_text_with_timestamps(json_obj):
                         time_range = attribute_table[attr_index].get("timeRange")
                         if time_range and isinstance(time_range, list) and len(time_range) >= 1:
                             current_time = time_range[0]
-                
+
                 segments.append((current_time, text))
-    
+
     if not segments:
         return ""
-    
+
     # Group segments into lines with improved logic
     lines = []
     current_line_time = segments[0][0]
     current_line_text = []
     prev_segment_time = segments[0][0]
-    
+
     for time, text in segments:
         if text.strip():
             # Calculate gap from previous segment (not from line start)
             time_gap = time - prev_segment_time
-            
+
             # Count words in current line
             current_words = ' '.join(current_line_text).split()
             word_count = len(current_words)
-            
+
             # Determine if we should break the line
             if current_line_text and should_break_line(
-                ' '.join(current_line_text), 
-                text, 
-                time_gap, 
+                ' '.join(current_line_text),
+                text,
+                time_gap,
                 word_count
             ):
                 # Clean and add the completed line
                 line_text = ' '.join(current_line_text)
-                line_text = clean_disfluencies(line_text)
+                line_text = clean_disfluencies(line_text, remove_fillers=remove_fillers)
                 if line_text.strip():
                     lines.append((current_line_time, line_text))
                 current_line_time = time
                 current_line_text = [text]
             else:
                 current_line_text.append(text)
-            
+
             prev_segment_time = time
-    
+
     # Add the last line
     if current_line_text:
         line_text = ' '.join(current_line_text)
-        line_text = clean_disfluencies(line_text)
+        line_text = clean_disfluencies(line_text, remove_fillers=remove_fillers)
         if line_text.strip():
             lines.append((current_line_time, line_text))
-    
-    # Format and combine lines
+
+    # Format and combine lines with paragraph breaks
     result = []
+    prev_line_time = None
+
     for time, text in lines:
         text = text.strip()
         if text:
+            # Insert paragraph break if there's a large time gap between lines
+            if prev_line_time is not None and (time - prev_line_time) >= PARAGRAPH_GAP_THRESHOLD:
+                result.append("")  # Blank line for paragraph break
+
             timestamp = format_timestamp(time)
             result.append(f"{timestamp} {text}")
-    
+            prev_line_time = time
+
     return "\n".join(result)
 
 
-def process_m4a_file(filename, mode):
+def process_m4a_file(filename, mode, remove_fillers=False):
     with open(filename, "rb") as f:
         file_size = f.seek(0, 2)
         f.seek(0)
@@ -266,9 +333,9 @@ def process_m4a_file(filename, mode):
             json.dump(json_obj, sys.stdout, ensure_ascii=False, separators=(",", ":"))
             print()
             return
-        
+
         if mode == "timestamps":
-            result = extract_text_with_timestamps(json_obj)
+            result = extract_text_with_timestamps(json_obj, remove_fillers=remove_fillers)
             if result:
                 print(result)
             return
@@ -305,6 +372,10 @@ if __name__ == "__main__":
     group.add_argument(
         "--timestamps", action="store_true", help="print transcript with timestamps"
     )
+    parser.add_argument(
+        "--clean", action="store_true",
+        help="remove filler words (uh, um) from output (use with --timestamps)"
+    )
     args = parser.parse_args()
 
     if args.json:
@@ -316,4 +387,4 @@ if __name__ == "__main__":
     else:
         mode = "text"
 
-    process_m4a_file(args.filename, mode=mode)
+    process_m4a_file(args.filename, mode=mode, remove_fillers=args.clean)
