@@ -32,6 +32,13 @@ The skill behaves differently in two environments:
 
 ## Recent Updates
 
+### Improved Line-Breaking Algorithm (2026-02-04)
+- Cleaned Apple pause markers (ellipsis artifacts like `. ..`) from output
+- Sentence-ending punctuation is now the primary break signal (matching industry best practices)
+- Added paragraph breaks (blank lines) when time gap between lines exceeds 6 seconds
+- Improved false start detection ("One of my One of my" → "One of my")
+- Filler words (uh, um) are now always removed for cleaner LLM consumption
+
 ### Duration in Metadata (2026-02-01)
 - Added `ZDURATION` to the metadata extraction query
 - Duration formatted as `M:SS` or `H:MM:SS` for recordings over an hour

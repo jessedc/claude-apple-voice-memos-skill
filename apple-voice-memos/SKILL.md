@@ -61,8 +61,10 @@ Extracts recording metadata (title, date, duration, filename) from the CloudReco
 
 Extracts the transcript embedded in a Voice Memo `.m4a` file. Apple stores transcripts in a proprietary `tsrp` atom inside the m4a container.
 
-- **IMPORTANT**: Always use the `--timestamps` flag to include time markers in the output
+- **IMPORTANT**: Always use `--timestamps` for the best LLM-readable output
 - The `--timestamps` option shows when each segment was spoken in `[M:SS]` or `[H:MM:SS]` format
+- Filler words (uh, um) are automatically removed for cleaner output
+- Output includes paragraph breaks (blank lines) at topic shifts (6+ second pauses)
 - Not all recordings have transcripts; the tool will exit with an error if no `tsrp` atom is found
 - Only Python 3 standard library is required (no dependencies)
 
@@ -137,14 +139,17 @@ If the user asked for a transcript of a specific memo, or if there is only one r
 python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --timestamps
 ```
 
-**Note**: Always use `--timestamps` to provide context about when things were said in the recording. This helps users navigate and understand the temporal flow of their voice memos.
+**Note**: Always use `--timestamps` for the best output. This provides temporal context and automatically removes filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts.
 
 Example output with timestamps:
 ```
-[0:00] Okay so I've been thinking about the garage project
-[0:15] mainly the electrical panel situation, whether we need to upgrade to 200 amp
-[0:32] actually wait, first thing—I need to call the permit office
-[1:05] back to the panel, the quote from Mike seemed high
+[0:00] Okay so I've been thinking about the garage project.
+[0:15] Mainly the electrical panel situation, whether we need to upgrade to 200 amp.
+
+[0:32] Actually wait, first thing I need to call the permit office.
+
+[1:05] Back to the panel, the quote from Mike seemed high.
+[1:12] I should get at least two more quotes before deciding.
 ```
 
 Where `<FILENAME>` is the `path` value from the metadata CSV.
