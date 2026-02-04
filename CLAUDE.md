@@ -44,11 +44,11 @@ The skill behaves differently in two environments:
 - Duration formatted as `M:SS` or `H:MM:SS` for recordings over an hour
 - CSV output now includes `duration` column between `date` and `path`
 
-### Timestamps Support (2026-01-31)
-- Added `--timestamps` option to transcript extraction tool
-- Outputs timestamps in `[M:SS]` or `[H:MM:SS]` format depending on recording length
+### Timestamps as Default Output (2026-02-04)
+- Changed transcript extraction tool to output timestamps by default
+- Timestamps shown in `[M:SS]` or `[H:MM:SS]` format depending on recording length
+- Added `--text` flag for plain text output without timestamps
 - Intelligently groups word segments into readable lines based on time gaps and sentence structure
-- Made timestamps mandatory in the skill workflow for better temporal context
 
 ### Claude Desktop Compatibility (2026-01-30)
 - Added environment detection to support both Claude Code and Claude Desktop
@@ -65,8 +65,8 @@ To test the skill locally:
 # List recent recordings (metadata)
 python3 apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d 30
 
-# Extract transcript from a specific file (with timestamps - recommended)
-python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a" --timestamps
+# Extract transcript from a specific file (with timestamps - default)
+python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a"
 
 # Extract transcript without timestamps (text only)
 python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a" --text

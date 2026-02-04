@@ -66,8 +66,8 @@ Extracts recording metadata (title, date, duration, filename) from the CloudReco
 
 Extracts the transcript embedded in a Voice Memo `.m4a` file. Apple stores transcripts in a proprietary `tsrp` atom inside the m4a container.
 
-- **IMPORTANT**: Always use `--timestamps` for the best LLM-readable output
-- The `--timestamps` option shows when each segment was spoken in `[M:SS]` or `[H:MM:SS]` format
+- **Default output includes timestamps** showing when each segment was spoken in `[M:SS]` or `[H:MM:SS]` format
+- Use `--text` for plain text output without timestamps
 - Filler words (uh, um) are automatically removed for cleaner output
 - Output includes paragraph breaks (blank lines) at topic shifts (6+ second pauses)
 - Not all recordings have transcripts; the tool will exit with an error if no `tsrp` atom is found
@@ -99,7 +99,7 @@ Claude Desktop runs in a Linux container without access to your Mac's filesystem
 
 3. **Extract the transcript**:
    ```bash
-   python3 /mnt/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "/mnt/user-data/uploads/<FILENAME>" --timestamps
+   python3 /mnt/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "/mnt/user-data/uploads/<FILENAME>"
    ```
 
 4. **Present the results**:
@@ -159,10 +159,10 @@ Display the recordings in a clear table or list format showing:
 If the user asked for a transcript of a specific memo, or if there is only one result, fetch the transcript:
 
 ```bash
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --timestamps
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>"
 ```
 
-**Note**: Always use `--timestamps` for the best output. This provides temporal context and automatically removes filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts.
+**Note**: The tool outputs timestamps by default, providing temporal context and automatically removing filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts. Use `--text` if you need plain text without timestamps.
 
 Example output with timestamps:
 ```

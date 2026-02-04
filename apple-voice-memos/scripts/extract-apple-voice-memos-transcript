@@ -351,24 +351,21 @@ if __name__ == "__main__":
     parser.add_argument("filename", help="path to the .m4a file")
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
-        "--text", action="store_true", help="print transcript as plain text (default)"
+        "--text", action="store_true", help="print transcript as plain text (without timestamps)"
     )
     group.add_argument(
         "--json", action="store_true", help="print transcript data as JSON"
     )
     group.add_argument("--raw", action="store_true", help="print raw transcript data")
-    group.add_argument(
-        "--timestamps", action="store_true", help="print transcript with timestamps"
-    )
     args = parser.parse_args()
 
     if args.json:
         mode = "json"
     elif args.raw:
         mode = "raw"
-    elif args.timestamps:
-        mode = "timestamps"
-    else:
+    elif args.text:
         mode = "text"
+    else:
+        mode = "timestamps"  # Default to timestamps
 
     process_m4a_file(args.filename, mode=mode)
