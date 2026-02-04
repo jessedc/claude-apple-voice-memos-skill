@@ -1,6 +1,7 @@
 ---
 name: apple-voice-memos
 description: Fetch metadata and transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memos.
+argument-hint: [days | date | search-text] [text-only | latest | all]
 allowed-tools: Bash(python3:*), Bash(ls:*)
 compatibility: macOS with Voice Memos iCloud sync enable, Python 3
 license: 0BSD
@@ -14,21 +15,57 @@ metadata:
 
 Fetch metadata and transcripts from Apple Voice Memos synced via iCloud.
 
-User arguments: $ARGUMENTS
-
 ## Arguments
 
-The user may provide optional arguments:
+User provided: $ARGUMENTS
 
-- **days:<number>** - Number of days to look back (default: 30). Example: `days:90`
-- **since:<date>** - Include recordings since this date. Example: `since:2026-01-01`
-- **until:<date>** - Include recordings until this date (use with since). Example: `since:2026-01-01 until:2026-01-31`
-- **year:<year>** - Include recordings from specified year. Example: `year:2026`
-- **month:<yyyy-mm>** - Include recordings from specified month. Example: `month:2026-01`
-- **search:<text>** - Filter memos by title (case-insensitive substring match). Example: `search:meeting`
-- Date filters are mutually exclusive (only use one of: days, since, year, month)
-- Search can be combined with any date filter: `year:2026 search:career`
-- If no arguments are provided, list all memos from the last 30 days.
+### Quick Usage Patterns
+
+- **Simple number**: Days to look back. `/apple-voice-memos 7` = last 7 days
+- **Text without prefix**: Search by title. `/apple-voice-memos meeting` = search for "meeting"
+- **Date shortcuts**: `today`, `yesterday`, `this-week`, `last-week`
+- **Transcript options**: `text-only` (plain text), `latest` (most recent), `all` (all transcripts)
+
+### Named Arguments (Advanced)
+
+- **days:N** - Number of days to look back. Example: `days:90`
+- **since:DATE** - Include recordings since this date. Example: `since:2026-01-01`
+- **until:DATE** - Include recordings until this date (use with since). Example: `until:2026-01-31`
+- **year:YYYY** - Include recordings from specified year. Example: `year:2026`
+- **month:YYYY-MM** - Include recordings from specified month. Example: `month:2026-01`
+- **search:TEXT** - Filter memos by title (case-insensitive). Example: `search:meeting notes`
+
+### Examples
+
+```bash
+# Last 7 days (positional)
+/apple-voice-memos 7
+
+# Search for "meeting" (positional)
+/apple-voice-memos meeting
+
+# Today's recordings
+/apple-voice-memos today
+
+# Last week with search
+/apple-voice-memos last-week meeting
+
+# Specific month with search
+/apple-voice-memos month:2026-01 search:project
+
+# Get latest transcript as plain text
+/apple-voice-memos latest text-only
+```
+
+### Parsing Logic
+
+1. If first argument is a number → treat as days
+2. If argument matches date shortcut → apply time range
+3. If argument contains `:` → parse as named argument
+4. Otherwise → treat as search term
+5. Special flags: `text-only`, `latest`, `all` modify transcript behavior
+6. Date filters are mutually exclusive (only use one)
+7. Default: last 30 days if no date filter specified
 
 ## Prerequisites
 
@@ -87,7 +124,7 @@ Extracts embedded transcripts from Voice Memo `.m4a` files using Apple's proprie
 
 **Output Modes:**
 - **Default**: Timestamped transcript with `[M:SS]` or `[H:MM:SS]` format
-- `--text`: Plain text without timestamps
+- `--text`: Plain text without timestamps (useful for simple summarization)
 - `--json`: Raw JSON data structure
 - `--raw`: Binary tsrp atom data
 
@@ -159,9 +196,38 @@ Claude Desktop runs in a Linux container without access to your Mac's filesystem
 
 If you're running in Claude Code with local filesystem access, use the full workflow:
 
-### Step 1: Fetch recording metadata
+### Step 1: Parse arguments
 
-Run the metadata extraction tool with the appropriate date filtering option based on user arguments:
+Parse the user arguments (`$ARGUMENTS`) according to these rules:
+
+1. **Date shortcuts mapping**:
+   - `today` → `--since [today's date]`
+   - `yesterday` → `--since [yesterday] --until [yesterday]`  
+   - `this-week` → `--since [start of current week]`
+   - `last-week` → `--since [start of last week] --until [end of last week]`
+
+2. **Positional number** (e.g., `7`):
+   - Treat as days: `-d 7`
+
+3. **Named arguments** (contains `:`):
+   - Parse directly: `days:30` → `-d 30`
+   - `since:2026-01-01` → `--since 2026-01-01`
+   - `until:2026-01-31` → `--until 2026-01-31`
+   - `year:2026` → `--year 2026`
+   - `month:2026-01` → `--month 2026-01`
+   - `search:text` → Apply as post-filter
+
+4. **Special transcript flags**:
+   - `text-only` → Use `--text` when extracting transcripts
+   - `latest` → Fetch transcript of most recent recording
+   - `all` → Extract all transcripts in results
+
+5. **Plain text** (no `:` and not a number/flag):
+   - Treat as search term
+
+### Step 2: Fetch recording metadata
+
+Run the metadata extraction tool with the parsed date filtering options:
 
 ```bash
 # Default (last 30 days)
@@ -189,11 +255,11 @@ The tool supports the following date filtering options:
 
 This outputs CSV with columns: `title`, `date`, `duration`, `path`
 
-### Step 2: Apply search filter (if provided)
+### Step 3: Apply search filter (if provided)
 
-If the user specified `search:<text>`, filter the results to only include rows whose title contains the search text (case-insensitive match). Apply this filter when presenting results.
+If the user specified `search:TEXT` or provided a plain text search term, filter the results to only include rows whose title contains the search text (case-insensitive match). Apply this filter when presenting results.
 
-### Step 3: Present the recordings
+### Step 4: Present the recordings
 
 Display the recordings in a clear table or list format showing:
 - Title
@@ -201,15 +267,27 @@ Display the recordings in a clear table or list format showing:
 - Duration
 - Filename
 
-### Step 4: Fetch transcripts (on request or automatically)
+### Step 5: Fetch transcripts (based on flags or request)
 
-If the user asked for a transcript of a specific memo, or if there is only one result, fetch the transcript:
+Handle transcript extraction based on parsed flags:
+
+- **`latest` flag**: Automatically fetch transcript of the most recent recording
+- **`all` flag**: Extract transcripts for all recordings in the results
+- **`text-only` flag**: Add `--text` to transcript extraction command
+- **Single result**: Automatically fetch its transcript
+- **User request**: Fetch transcript for specific memo by title/number
+
+Fetch transcripts using:
 
 ```bash
+# Default (with timestamps)
 python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>"
+
+# With text-only flag (plain text without timestamps)
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --text
 ```
 
-**Note**: The tool outputs timestamps by default, providing temporal context and automatically removing filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts. Use `--text` if you need plain text without timestamps.
+**Note**: The tool outputs timestamps by default, providing temporal context and automatically removing filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts. When the user includes the `text-only` flag in their arguments, use `--text` to output plain text without timestamps.
 
 Example output with timestamps:
 ```
@@ -226,7 +304,7 @@ Where `<FILENAME>` is the `path` value from the metadata CSV.
 
 If the transcript tool exits with an error (e.g., "tsrp atom not found"), inform the user that no transcript is available for that recording. This is normal - not all memos have transcripts (the device must have generated one).
 
-### Step 5: Respond to follow-up requests
+### Step 6: Respond to follow-up requests
 
 After presenting the initial results, the user may ask to:
 - Get the transcript of a specific memo (by title or number)
