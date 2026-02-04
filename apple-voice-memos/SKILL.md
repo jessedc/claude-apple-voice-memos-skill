@@ -21,8 +21,13 @@ User arguments: $ARGUMENTS
 The user may provide optional arguments:
 
 - **days:<number>** - Number of days to look back (default: 30). Example: `days:90`
+- **since:<date>** - Include recordings since this date. Example: `since:2026-01-01`
+- **until:<date>** - Include recordings until this date (use with since). Example: `since:2026-01-01 until:2026-01-31`
+- **year:<year>** - Include recordings from specified year. Example: `year:2026`
+- **month:<yyyy-mm>** - Include recordings from specified month. Example: `month:2026-01`
 - **search:<text>** - Filter memos by title (case-insensitive substring match). Example: `search:meeting`
-- Both can be combined: `days:60 search:idea`
+- Date filters are mutually exclusive (only use one of: days, since, year, month)
+- Search can be combined with any date filter: `year:2026 search:career`
 - If no arguments are provided, list all memos from the last 30 days.
 
 ## Prerequisites
@@ -109,13 +114,31 @@ If you're running in Claude Code with local filesystem access, use the full work
 
 ### Step 1: Fetch recording metadata
 
-Run the metadata extraction tool to list recent recordings:
+Run the metadata extraction tool with the appropriate date filtering option based on user arguments:
 
 ```bash
+# Default (last 30 days)
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db"
+
+# With days argument
 python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d <DAYS>
+
+# With year argument
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --year <YEAR>
+
+# With month argument
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --month <YYYY-MM>
+
+# With date range
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --since <DATE> [--until <DATE>]
 ```
 
-Where `<DAYS>` is the number of days from the `days:` argument (default 30).
+The tool supports the following date filtering options:
+- `-d, --days N`: Look back N days from today
+- `--since DATE`: Include recordings since this date (YYYY-MM-DD format)
+- `--until DATE`: Include recordings until this date (use with --since)
+- `--year YEAR`: Include all recordings from the specified year
+- `--month YYYY-MM`: Include all recordings from the specified month
 
 This outputs CSV with columns: `title`, `date`, `duration`, `path`
 
