@@ -60,8 +60,17 @@ jobs:
       - name: Generate release notes
         id: release_notes
         run: |
-          # Get the previous tag for comparison
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          # Fetch all tags to ensure we have the complete history
+          git fetch --tags
+          
+          # Get the current tag
+          CURRENT_TAG=${{ steps.get_version.outputs.VERSION }}
+          
+          # Get all tags sorted by version, excluding the current one
+          ALL_TAGS=$(git tag -l --sort=-version:refname | grep -v "^${CURRENT_TAG}$" || echo "")
+          
+          # Get the most recent previous tag
+          PREVIOUS_TAG=$(echo "$ALL_TAGS" | head -n1)
           
           if [[ -z "$PREVIOUS_TAG" ]]; then
             echo "NOTES=Initial release of the Apple Voice Memos Claude skill." >> $GITHUB_OUTPUT
@@ -70,7 +79,16 @@ jobs:
             echo "NOTES<<EOF" >> $GITHUB_OUTPUT
             echo "## Changes since $PREVIOUS_TAG" >> $GITHUB_OUTPUT
             echo "" >> $GITHUB_OUTPUT
-            git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD >> $GITHUB_OUTPUT
+            
+            # Check if there are any commits between tags
+            COMMIT_COUNT=$(git rev-list --count $PREVIOUS_TAG..$CURRENT_TAG 2>/dev/null || echo "0")
+            
+            if [[ "$COMMIT_COUNT" == "0" || "$COMMIT_COUNT" == "" ]]; then
+              echo "*No changes - re-release of $PREVIOUS_TAG*" >> $GITHUB_OUTPUT
+            else
+              git log --pretty=format:"- %s" $PREVIOUS_TAG..$CURRENT_TAG >> $GITHUB_OUTPUT
+            fi
+            
             echo "" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           fi
