@@ -1,6 +1,7 @@
 ---
 name: apple-voice-memos
 description: Fetch metadata and transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memos.
+argument-hint: [days | date | search-text] [text-only | latest | all]
 allowed-tools: Bash(python3:*), Bash(ls:*)
 compatibility: macOS with Voice Memos iCloud sync enable, Python 3
 license: 0BSD
@@ -14,43 +15,108 @@ metadata:
 
 Fetch metadata and transcripts from Apple Voice Memos synced via iCloud.
 
-User arguments: $ARGUMENTS
-
 ## Arguments
 
-The user may provide optional arguments:
+User provided: $ARGUMENTS
 
-- **days:<number>** - Number of days to look back (default: 30). Example: `days:90`
-- **since:<date>** - Include recordings since this date. Example: `since:2026-01-01`
-- **until:<date>** - Include recordings until this date (use with since). Example: `since:2026-01-01 until:2026-01-31`
-- **year:<year>** - Include recordings from specified year. Example: `year:2026`
-- **month:<yyyy-mm>** - Include recordings from specified month. Example: `month:2026-01`
-- **search:<text>** - Filter memos by title (case-insensitive substring match). Example: `search:meeting`
-- Date filters are mutually exclusive (only use one of: days, since, year, month)
-- Search can be combined with any date filter: `year:2026 search:career`
-- If no arguments are provided, list all memos from the last 30 days.
+### Quick Usage Patterns
+
+- **Simple number**: Days to look back. `/apple-voice-memos 7` = last 7 days
+- **Text without prefix**: Search by title. `/apple-voice-memos meeting` = search for "meeting"
+- **Date shortcuts**: `today`, `yesterday`, `this-week`, `last-week`
+- **Transcript options**: `text-only` (plain text), `latest` (most recent), `all` (all transcripts)
+
+### Named Arguments (Advanced)
+
+- **days:N** - Number of days to look back. Example: `days:90`
+- **since:DATE** - Include recordings since this date. Example: `since:2026-01-01`
+- **until:DATE** - Include recordings until this date (use with since). Example: `until:2026-01-31`
+- **year:YYYY** - Include recordings from specified year. Example: `year:2026`
+- **month:YYYY-MM** - Include recordings from specified month. Example: `month:2026-01`
+- **search:TEXT** - Filter memos by title (case-insensitive). Example: `search:meeting notes`
+
+### Examples
+
+```bash
+# Last 7 days (positional)
+/apple-voice-memos 7
+
+# Search for "meeting" (positional)
+/apple-voice-memos meeting
+
+# Today's recordings
+/apple-voice-memos today
+
+# Last week with search
+/apple-voice-memos last-week meeting
+
+# Specific month with search
+/apple-voice-memos month:2026-01 search:project
+
+# Get latest transcript as plain text
+/apple-voice-memos latest text-only
+```
+
+### Parsing Logic
+
+1. If first argument is a number → treat as days
+2. If argument matches date shortcut → apply time range
+3. If argument contains `:` → parse as named argument
+4. Otherwise → treat as search term
+5. Special flags: `text-only`, `latest`, `all` modify transcript behavior
+6. Date filters are mutually exclusive (only use one)
+7. Default: last 30 days if no date filter specified
 
 ## Prerequisites
 
-Voice Memos must be synced with iCloud. The recordings directory is:
-
-```
-~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/
-```
+Voice Memos must be synced with iCloud on macOS. Use the detection script to verify access and obtain the recordings directory path.
 
 ## Environment Detection
 
-First, determine which environment you're running in:
+First, determine which environment you're running in by checking the operating system:
 
-1. **Check for local filesystem access**: Try `ls "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/"`
-   - If successful → You're in **Claude Code** (local macOS) → Continue with full workflow below
-   - If failed → You're in **Claude Desktop** (Linux container) → Skip to Claude Desktop Workflow section
+```bash
+uname -s
+```
 
-Before doing anything else in Claude Code, verify this directory exists using `ls` with `$HOME`. If it does not exist, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
+- **Darwin**: You're in **Claude Code** (local macOS). Continue to check for iCloud sync below.
+- **Linux**: You're in **Claude Desktop** (container environment). Skip to Claude Desktop Workflow section.
+
+### Checking iCloud Sync (Claude Code only)
+
+If on macOS, verify Voice Memos iCloud sync is enabled:
+
+```bash
+RECORDINGS_DIR=$(python3 ~/.claude/skills/apple-voice-memos/scripts/detect-voice-memos-directory)
+```
+
+- **If successful** (exit code 0): iCloud sync is enabled. `$RECORDINGS_DIR` contains the full path. Continue with Claude Code Workflow.
+- **If failed** (exit code 1): iCloud sync is not enabled or Voice Memos has not synced to this Mac. Inform the user and stop.
 
 ## Tools
 
-This skill includes two helper tools in its `scripts/` directory.
+This skill includes three helper tools in its `scripts/` directory.
+
+### `detect-voice-memos-directory`
+
+Detects if iCloud sync is enabled for Voice Memos and returns the full path to the Recordings directory.
+
+**Output:**
+- On success: Prints the full expanded path to stdout and exits with code 0
+- On failure: Prints an error message to stderr and exits with code 1
+
+**Usage:**
+```bash
+# Get the recordings directory path
+RECORDINGS_DIR=$(python3 scripts/detect-voice-memos-directory)
+
+# Use in conditional
+if RECORDINGS_DIR=$(python3 scripts/detect-voice-memos-directory 2>/dev/null); then
+    echo "Found recordings at: $RECORDINGS_DIR"
+else
+    echo "Voice Memos directory not found"
+fi
+```
 
 ### `extract-apple-voice-memos-metadata`
 
@@ -71,14 +137,17 @@ Queries the CloudRecordings.db SQLite database to retrieve recording metadata.
 
 **Usage Examples:**
 ```bash
+# First, get the recordings directory
+RECORDINGS_DIR=$(python3 scripts/detect-voice-memos-directory)
+
 # Last 7 days
-python3 scripts/extract-apple-voice-memos-metadata "path/to/CloudRecordings.db" -d 7
+python3 scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" -d 7
 
 # Specific month
-python3 scripts/extract-apple-voice-memos-metadata "path/to/CloudRecordings.db" --month 2026-01
+python3 scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --month 2026-01
 
 # Date range
-python3 scripts/extract-apple-voice-memos-metadata "path/to/CloudRecordings.db" --since 2026-01-01 --until 2026-01-31
+python3 scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --since 2026-01-01 --until 2026-01-31
 ```
 
 ### `extract-apple-voice-memos-transcript`
@@ -87,7 +156,7 @@ Extracts embedded transcripts from Voice Memo `.m4a` files using Apple's proprie
 
 **Output Modes:**
 - **Default**: Timestamped transcript with `[M:SS]` or `[H:MM:SS]` format
-- `--text`: Plain text without timestamps
+- `--text`: Plain text without timestamps (useful for simple summarization)
 - `--json`: Raw JSON data structure
 - `--raw`: Binary tsrp atom data
 
@@ -100,14 +169,14 @@ Extracts embedded transcripts from Voice Memo `.m4a` files using Apple's proprie
 
 **Usage Examples:**
 ```bash
+# First, get the recordings directory
+RECORDINGS_DIR=$(python3 scripts/detect-voice-memos-directory)
+
 # Default (with timestamps)
-python3 scripts/extract-apple-voice-memos-transcript "recording.m4a"
+python3 scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>.m4a"
 
 # Plain text only
-python3 scripts/extract-apple-voice-memos-transcript "recording.m4a" --text
-
-# Debug JSON structure
-python3 scripts/extract-apple-voice-memos-transcript "recording.m4a" --json
+python3 scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>.m4a" --text
 ```
 
 **Error Handling:**
@@ -120,8 +189,8 @@ python3 scripts/extract-apple-voice-memos-transcript "recording.m4a" --json
 ### Important Notes
 
 - `ZPATH` from the database contains only the filename (e.g., `20260127 132931-409ABD3B.m4a`)
-- Full path must be constructed by joining the Recordings directory with the filename
-- Both tools require only Python 3 standard library (no external dependencies)
+- Full path must be constructed by joining `$RECORDINGS_DIR` with the filename
+- All tools require only Python 3 standard library (no external dependencies)
 - Tools are designed to be read-only and safe to run repeatedly
 
 ## Claude Desktop Workflow (Container Environment)
@@ -157,27 +226,66 @@ Claude Desktop runs in a Linux container without access to your Mac's filesystem
 
 ## Claude Code Workflow (Local macOS)
 
-If you're running in Claude Code with local filesystem access, use the full workflow:
+If you're running in Claude Code with local filesystem access, use the full workflow.
 
-### Step 1: Fetch recording metadata
+### Step 1: Detect recordings directory
 
-Run the metadata extraction tool with the appropriate date filtering option based on user arguments:
+First, detect and store the recordings directory path:
+
+```bash
+RECORDINGS_DIR=$(python3 ~/.claude/skills/apple-voice-memos/scripts/detect-voice-memos-directory)
+```
+
+If this fails, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
+
+### Step 2: Parse arguments
+
+Parse the user arguments (`$ARGUMENTS`) according to these rules:
+
+1. **Date shortcuts mapping**:
+   - `today` → `--since [today's date]`
+   - `yesterday` → `--since [yesterday] --until [yesterday]`  
+   - `this-week` → `--since [start of current week]`
+   - `last-week` → `--since [start of last week] --until [end of last week]`
+
+2. **Positional number** (e.g., `7`):
+   - Treat as days: `-d 7`
+
+3. **Named arguments** (contains `:`):
+   - Parse directly: `days:30` → `-d 30`
+   - `since:2026-01-01` → `--since 2026-01-01`
+   - `until:2026-01-31` → `--until 2026-01-31`
+   - `year:2026` → `--year 2026`
+   - `month:2026-01` → `--month 2026-01`
+   - `search:text` → Apply as post-filter
+
+4. **Special transcript flags**:
+   - `text-only` → Use `--text` when extracting transcripts
+   - `latest` → Fetch transcript of most recent recording
+   - `all` → Extract all transcripts in results
+
+5. **Plain text** (no `:` and not a number/flag):
+   - Treat as search term
+
+### Step 3: Fetch recording metadata
+
+Run the metadata extraction tool with the parsed date filtering options (using `$RECORDINGS_DIR` from Step 1):
 
 ```bash
 # Default (last 30 days)
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db"
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db"
 
 # With days argument
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d <DAYS>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" -d <DAYS>
 
 # With year argument
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --year <YEAR>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --year <YEAR>
 
 # With month argument
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --month <YYYY-MM>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --month <YYYY-MM>
 
 # With date range
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --since <DATE> [--until <DATE>]
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --since <DATE> [--until <DATE>]
 ```
 
 The tool supports the following date filtering options:
@@ -189,11 +297,11 @@ The tool supports the following date filtering options:
 
 This outputs CSV with columns: `title`, `date`, `duration`, `path`
 
-### Step 2: Apply search filter (if provided)
+### Step 4: Apply search filter (if provided)
 
-If the user specified `search:<text>`, filter the results to only include rows whose title contains the search text (case-insensitive match). Apply this filter when presenting results.
+If the user specified `search:TEXT` or provided a plain text search term, filter the results to only include rows whose title contains the search text (case-insensitive match). Apply this filter when presenting results.
 
-### Step 3: Present the recordings
+### Step 5: Present the recordings
 
 Display the recordings in a clear table or list format showing:
 - Title
@@ -201,32 +309,33 @@ Display the recordings in a clear table or list format showing:
 - Duration
 - Filename
 
-### Step 4: Fetch transcripts (on request or automatically)
+### Step 6: Fetch transcripts (based on flags or request)
 
-If the user asked for a transcript of a specific memo, or if there is only one result, fetch the transcript:
+Handle transcript extraction based on parsed flags:
+
+- **`latest` flag**: Automatically fetch transcript of the most recent recording
+- **`all` flag**: Extract transcripts for all recordings in the results
+- **`text-only` flag**: Add `--text` to transcript extraction command
+- **Single result**: Automatically fetch its transcript
+- **User request**: Fetch transcript for specific memo by title/number
+
+Fetch transcripts using `$RECORDINGS_DIR` from Step 1:
 
 ```bash
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>"
-```
+# Default (with timestamps)
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>"
 
-**Note**: The tool outputs timestamps by default, providing temporal context and automatically removing filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts. Use `--text` if you need plain text without timestamps.
-
-Example output with timestamps:
-```
-[0:00] Okay so I've been thinking about the garage project.
-[0:15] Mainly the electrical panel situation, whether we need to upgrade to 200 amp.
-
-[0:32] Actually wait, first thing I need to call the permit office.
-
-[1:05] Back to the panel, the quote from Mike seemed high.
-[1:12] I should get at least two more quotes before deciding.
+# With text-only flag (plain text without timestamps)
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>" --text
 ```
 
 Where `<FILENAME>` is the `path` value from the metadata CSV.
 
+**Note**: The tool outputs timestamps by default, providing temporal context and automatically removing filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts. When the user includes the `text-only` flag in their arguments, use `--text` to output plain text without timestamps.
+
 If the transcript tool exits with an error (e.g., "tsrp atom not found"), inform the user that no transcript is available for that recording. This is normal - not all memos have transcripts (the device must have generated one).
 
-### Step 5: Respond to follow-up requests
+### Step 7: Respond to follow-up requests
 
 After presenting the initial results, the user may ask to:
 - Get the transcript of a specific memo (by title or number)

@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: 0BSD
+"""Detect and return the Apple Voice Memos iCloud sync directory path."""
+
+import os
+import sys
+
+VOICE_MEMOS_PATH = "~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/"
+
+
+def main():
+    path = os.path.expanduser(VOICE_MEMOS_PATH)
+
+    if os.path.isdir(path):
+        print(path)
+        sys.exit(0)
+    else:
+        print(
+            f"Error: Voice Memos directory not found at:\n"
+            f"  {path}\n\n"
+            f"This may indicate that iCloud sync is not enabled for Voice Memos, "
+            f"or the Voice Memos app has not been used on this device.",
+            file=sys.stderr
+        )
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
