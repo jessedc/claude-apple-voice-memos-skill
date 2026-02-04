@@ -21,8 +21,13 @@ User arguments: $ARGUMENTS
 The user may provide optional arguments:
 
 - **days:<number>** - Number of days to look back (default: 30). Example: `days:90`
+- **since:<date>** - Include recordings since this date. Example: `since:2026-01-01`
+- **until:<date>** - Include recordings until this date (use with since). Example: `since:2026-01-01 until:2026-01-31`
+- **year:<year>** - Include recordings from specified year. Example: `year:2026`
+- **month:<yyyy-mm>** - Include recordings from specified month. Example: `month:2026-01`
 - **search:<text>** - Filter memos by title (case-insensitive substring match). Example: `search:meeting`
-- Both can be combined: `days:60 search:idea`
+- Date filters are mutually exclusive (only use one of: days, since, year, month)
+- Search can be combined with any date filter: `year:2026 search:career`
 - If no arguments are provided, list all memos from the last 30 days.
 
 ## Prerequisites
@@ -49,28 +54,75 @@ This skill includes two helper tools in its `scripts/` directory.
 
 ### `extract-apple-voice-memos-metadata`
 
-Extracts recording metadata (title, date, duration, filename) from the CloudRecordings.db SQLite database.
+Queries the CloudRecordings.db SQLite database to retrieve recording metadata.
 
-- Outputs CSV to stdout with columns: `title`, `date`, `duration`, `path`
-- Duration is formatted as `M:SS` or `H:MM:SS` for longer recordings
-- `-d DAYS` controls how far back to look (default: 30 days)
-- Dates are converted from Core Data epoch (seconds since 2001-01-01) to ISO 8601
-- The database is opened in read-only mode (`?mode=ro`)
+**Output Format:**
+- CSV to stdout with columns: `title`, `date`, `duration`, `path`
+- Duration formatted as `M:SS` or `H:MM:SS` for recordings over an hour
+- Dates converted from Core Data epoch to ISO 8601 format
+- Database opened in read-only mode (`?mode=ro`) for safety
+
+**Date Filtering Options:**
+- `-d, --days N`: Look back N days from today (default: 30)
+- `--since YYYY-MM-DD`: Include recordings since this date
+- `--until YYYY-MM-DD`: Include recordings until this date (use with --since)
+- `--year YYYY`: All recordings from specified year
+- `--month YYYY-MM`: All recordings from specified month
+
+**Usage Examples:**
+```bash
+# Last 7 days
+python3 scripts/extract-apple-voice-memos-metadata "path/to/CloudRecordings.db" -d 7
+
+# Specific month
+python3 scripts/extract-apple-voice-memos-metadata "path/to/CloudRecordings.db" --month 2026-01
+
+# Date range
+python3 scripts/extract-apple-voice-memos-metadata "path/to/CloudRecordings.db" --since 2026-01-01 --until 2026-01-31
+```
 
 ### `extract-apple-voice-memos-transcript`
 
-Extracts the transcript embedded in a Voice Memo `.m4a` file. Apple stores transcripts in a proprietary `tsrp` atom inside the m4a container.
+Extracts embedded transcripts from Voice Memo `.m4a` files using Apple's proprietary `tsrp` atom format.
 
-- **IMPORTANT**: Always use `--timestamps` for the best LLM-readable output
-- The `--timestamps` option shows when each segment was spoken in `[M:SS]` or `[H:MM:SS]` format
-- Filler words (uh, um) are automatically removed for cleaner output
-- Output includes paragraph breaks (blank lines) at topic shifts (6+ second pauses)
-- Not all recordings have transcripts; the tool will exit with an error if no `tsrp` atom is found
-- Only Python 3 standard library is required (no dependencies)
+**Output Modes:**
+- **Default**: Timestamped transcript with `[M:SS]` or `[H:MM:SS]` format
+- `--text`: Plain text without timestamps
+- `--json`: Raw JSON data structure
+- `--raw`: Binary tsrp atom data
 
-### Important notes
+**Features:**
+- Automatic removal of filler words (uh, um) for cleaner LLM consumption
+- Intelligent line breaking based on sentence boundaries and pauses
+- Paragraph breaks (blank lines) at natural topic shifts (6+ second gaps)
+- False start detection and cleanup ("I went to I went to" → "I went to")
+- Removal of Apple's pause markers (ellipsis artifacts)
 
-- `ZPATH` contains only the filename (e.g., `20260127 132931-409ABD3B.m4a`), not a full path. The full path is constructed by joining the Recordings directory with the filename.
+**Usage Examples:**
+```bash
+# Default (with timestamps)
+python3 scripts/extract-apple-voice-memos-transcript "recording.m4a"
+
+# Plain text only
+python3 scripts/extract-apple-voice-memos-transcript "recording.m4a" --text
+
+# Debug JSON structure
+python3 scripts/extract-apple-voice-memos-transcript "recording.m4a" --json
+```
+
+**Error Handling:**
+- Exit with error if no `tsrp` atom found (not all recordings have transcripts)
+- Transcripts are generated on-device by Apple and may not be available for:
+  - Recordings made before transcript feature was enabled
+  - Recordings in unsupported languages
+  - Very short recordings
+
+### Important Notes
+
+- `ZPATH` from the database contains only the filename (e.g., `20260127 132931-409ABD3B.m4a`)
+- Full path must be constructed by joining the Recordings directory with the filename
+- Both tools require only Python 3 standard library (no external dependencies)
+- Tools are designed to be read-only and safe to run repeatedly
 
 ## Claude Desktop Workflow (Container Environment)
 
@@ -94,7 +146,7 @@ Claude Desktop runs in a Linux container without access to your Mac's filesystem
 
 3. **Extract the transcript**:
    ```bash
-   python3 /mnt/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "/mnt/user-data/uploads/<FILENAME>" --timestamps
+   python3 /mnt/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "/mnt/user-data/uploads/<FILENAME>"
    ```
 
 4. **Present the results**:
@@ -109,13 +161,31 @@ If you're running in Claude Code with local filesystem access, use the full work
 
 ### Step 1: Fetch recording metadata
 
-Run the metadata extraction tool to list recent recordings:
+Run the metadata extraction tool with the appropriate date filtering option based on user arguments:
 
 ```bash
+# Default (last 30 days)
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db"
+
+# With days argument
 python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" -d <DAYS>
+
+# With year argument
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --year <YEAR>
+
+# With month argument
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --month <YYYY-MM>
+
+# With date range
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db" --since <DATE> [--until <DATE>]
 ```
 
-Where `<DAYS>` is the number of days from the `days:` argument (default 30).
+The tool supports the following date filtering options:
+- `-d, --days N`: Look back N days from today
+- `--since DATE`: Include recordings since this date (YYYY-MM-DD format)
+- `--until DATE`: Include recordings until this date (use with --since)
+- `--year YEAR`: Include all recordings from the specified year
+- `--month YYYY-MM`: Include all recordings from the specified month
 
 This outputs CSV with columns: `title`, `date`, `duration`, `path`
 
@@ -136,10 +206,10 @@ Display the recordings in a clear table or list format showing:
 If the user asked for a transcript of a specific memo, or if there is only one result, fetch the transcript:
 
 ```bash
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --timestamps
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>"
 ```
 
-**Note**: Always use `--timestamps` for the best output. This provides temporal context and automatically removes filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts.
+**Note**: The tool outputs timestamps by default, providing temporal context and automatically removing filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts. Use `--text` if you need plain text without timestamps.
 
 Example output with timestamps:
 ```
