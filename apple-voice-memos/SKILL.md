@@ -61,9 +61,9 @@ Extracts recording metadata (title, date, duration, filename) from the CloudReco
 
 Extracts the transcript embedded in a Voice Memo `.m4a` file. Apple stores transcripts in a proprietary `tsrp` atom inside the m4a container.
 
-- **IMPORTANT**: Always use `--timestamps --clean` for the best LLM-readable output
+- **IMPORTANT**: Always use `--timestamps` for the best LLM-readable output
 - The `--timestamps` option shows when each segment was spoken in `[M:SS]` or `[H:MM:SS]` format
-- The `--clean` option removes filler words (uh, um) for cleaner output
+- Filler words (uh, um) are automatically removed for cleaner output
 - Output includes paragraph breaks (blank lines) at topic shifts (6+ second pauses)
 - Not all recordings have transcripts; the tool will exit with an error if no `tsrp` atom is found
 - Only Python 3 standard library is required (no dependencies)
@@ -94,7 +94,7 @@ Claude Desktop runs in a Linux container without access to your Mac's filesystem
 
 3. **Extract the transcript**:
    ```bash
-   python3 /mnt/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "/mnt/user-data/uploads/<FILENAME>" --timestamps --clean
+   python3 /mnt/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "/mnt/user-data/uploads/<FILENAME>" --timestamps
    ```
 
 4. **Present the results**:
@@ -136,10 +136,10 @@ Display the recordings in a clear table or list format showing:
 If the user asked for a transcript of a specific memo, or if there is only one result, fetch the transcript:
 
 ```bash
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --timestamps --clean
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$HOME/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>" --timestamps
 ```
 
-**Note**: Always use `--timestamps --clean` for the best output. The `--timestamps` flag provides temporal context, and `--clean` removes filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts.
+**Note**: Always use `--timestamps` for the best output. This provides temporal context and automatically removes filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts.
 
 Example output with timestamps:
 ```

@@ -127,13 +127,8 @@ def clean_pause_markers(text):
     return text
 
 
-def clean_disfluencies(text, remove_fillers=False):
-    """Clean up common speech disfluencies while preserving meaning.
-
-    Args:
-        text: The text to clean
-        remove_fillers: If True, remove filler words like "uh", "um"
-    """
+def clean_disfluencies(text):
+    """Clean up common speech disfluencies while preserving meaning."""
     # First clean pause markers
     text = clean_pause_markers(text)
 
@@ -155,13 +150,11 @@ def clean_disfluencies(text, remove_fillers=False):
     pattern = r'\b(\w+)\s+\1\b'
     text = re.sub(pattern, r'\1', text, flags=re.IGNORECASE)
 
-    # Remove filler words if requested
-    if remove_fillers:
-        # Remove "uh", "um", "uh...", "um..." including with punctuation
-        text = re.sub(r'\b[Uu]h\.{0,3}\s*', '', text)
-        text = re.sub(r'\b[Uu]m\.{0,3}\s*', '', text)
-        text = re.sub(r',\s*[Uu]h\s*,', ',', text)  # Handle ", uh," patterns
-        text = re.sub(r',\s*[Uu]m\s*,', ',', text)
+    # Remove filler words (uh, um)
+    text = re.sub(r'\b[Uu]h\.{0,3}\s*', '', text)
+    text = re.sub(r'\b[Uu]m\.{0,3}\s*', '', text)
+    text = re.sub(r',\s*[Uu]h\s*,', ',', text)  # Handle ", uh," patterns
+    text = re.sub(r',\s*[Uu]m\s*,', ',', text)
 
     # Clean up spacing around punctuation
     text = re.sub(r'\s+([.,;:!?])', r'\1', text)  # Remove space before punctuation
@@ -176,13 +169,8 @@ def clean_disfluencies(text, remove_fillers=False):
     return text.strip()
 
 
-def extract_text_with_timestamps(json_obj, remove_fillers=False):
-    """Extract text segments with their timestamps from the JSON object.
-
-    Args:
-        json_obj: The parsed JSON transcript data
-        remove_fillers: If True, remove filler words (uh, um) from output
-    """
+def extract_text_with_timestamps(json_obj):
+    """Extract text segments with their timestamps from the JSON object."""
     # Paragraph break threshold (seconds between lines to insert blank line)
     PARAGRAPH_GAP_THRESHOLD = 6.0
 
@@ -259,7 +247,7 @@ def extract_text_with_timestamps(json_obj, remove_fillers=False):
             ):
                 # Clean and add the completed line
                 line_text = ' '.join(current_line_text)
-                line_text = clean_disfluencies(line_text, remove_fillers=remove_fillers)
+                line_text = clean_disfluencies(line_text)
                 if line_text.strip():
                     lines.append((current_line_time, line_text))
                 current_line_time = time
@@ -272,7 +260,7 @@ def extract_text_with_timestamps(json_obj, remove_fillers=False):
     # Add the last line
     if current_line_text:
         line_text = ' '.join(current_line_text)
-        line_text = clean_disfluencies(line_text, remove_fillers=remove_fillers)
+        line_text = clean_disfluencies(line_text)
         if line_text.strip():
             lines.append((current_line_time, line_text))
 
@@ -294,7 +282,7 @@ def extract_text_with_timestamps(json_obj, remove_fillers=False):
     return "\n".join(result)
 
 
-def process_m4a_file(filename, mode, remove_fillers=False):
+def process_m4a_file(filename, mode):
     with open(filename, "rb") as f:
         file_size = f.seek(0, 2)
         f.seek(0)
@@ -335,7 +323,7 @@ def process_m4a_file(filename, mode, remove_fillers=False):
             return
 
         if mode == "timestamps":
-            result = extract_text_with_timestamps(json_obj, remove_fillers=remove_fillers)
+            result = extract_text_with_timestamps(json_obj)
             if result:
                 print(result)
             return
@@ -372,10 +360,6 @@ if __name__ == "__main__":
     group.add_argument(
         "--timestamps", action="store_true", help="print transcript with timestamps"
     )
-    parser.add_argument(
-        "--clean", action="store_true",
-        help="remove filler words (uh, um) from output (use with --timestamps)"
-    )
     args = parser.parse_args()
 
     if args.json:
@@ -387,4 +371,4 @@ if __name__ == "__main__":
     else:
         mode = "text"
 
-    process_m4a_file(args.filename, mode=mode, remove_fillers=args.clean)
+    process_m4a_file(args.filename, mode=mode)
