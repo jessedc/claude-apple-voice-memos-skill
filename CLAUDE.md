@@ -11,6 +11,7 @@ This is a Claude skill that provides access to Apple Voice Memos synced via iClo
 The project consists of:
 - **Skill definition**: `apple-voice-memos/SKILL.md` - Defines the skill's capabilities, arguments, and workflow
 - **Python scripts**: Located in `apple-voice-memos/scripts/`
+  - `detect-voice-memos-directory`: Detects if iCloud sync is enabled and returns the full path to the Recordings directory
   - `extract-apple-voice-memos-metadata`: Queries the CloudRecordings.db SQLite database for recording metadata (title, date, duration, filename)
   - `extract-apple-voice-memos-transcript`: Extracts embedded transcripts from .m4a files using the proprietary `tsrp` atom format
 
@@ -62,14 +63,17 @@ This is a Claude skill project, not a traditional development project. There are
 
 To test the skill locally:
 ```bash
+# First, detect and store the recordings directory path
+RECORDINGS_DIR=$(python3 apple-voice-memos/scripts/detect-voice-memos-directory)
+
 # List recent recordings (metadata)
-python3 apple-voice-memos/scripts/extract-apple-voice-memos-metadata ~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db -d 30
+python3 apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" -d 30
 
 # Extract transcript from a specific file (with timestamps - default)
-python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript ~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a
+python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>.m4a"
 
 # Extract transcript without timestamps (text only)
-python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript ~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/<FILENAME>.m4a --text
+python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>.m4a" --text
 ```
 
 ## Important Notes
