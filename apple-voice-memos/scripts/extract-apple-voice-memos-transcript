@@ -5,9 +5,28 @@
 
 import argparse
 import json
+import os
 import re
 import struct
 import sys
+
+VOICE_MEMOS_PATH = "~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/"
+
+
+def resolve_file_path(filename):
+    """Resolve file path, auto-detecting recordings directory if needed."""
+    # If it's an absolute path or exists as-is, use it directly
+    if os.path.isabs(filename) or os.path.exists(filename):
+        return filename
+
+    # Try prepending the recordings directory
+    recordings_dir = os.path.expanduser(VOICE_MEMOS_PATH)
+    full_path = os.path.join(recordings_dir, filename)
+    if os.path.exists(full_path):
+        return full_path
+
+    # Return original - will fail with clear file-not-found error
+    return filename
 
 
 def read_atom_header(f):
@@ -368,4 +387,5 @@ if __name__ == "__main__":
     else:
         mode = "timestamps"  # Default to timestamps
 
-    process_m4a_file(args.filename, mode=mode)
+    filepath = resolve_file_path(args.filename)
+    process_m4a_file(filepath, mode=mode)

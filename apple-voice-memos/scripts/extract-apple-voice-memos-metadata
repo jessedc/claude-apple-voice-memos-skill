@@ -5,11 +5,30 @@
 import argparse
 import csv
 import os
+import platform
 import sqlite3
 import sys
 from datetime import datetime, timezone, timedelta
 
 CORE_DATA_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)
+VOICE_MEMOS_PATH = "~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/"
+
+
+def get_default_database_path():
+    """Auto-detect the CloudRecordings.db path."""
+    if platform.system() == "Linux":
+        print("Error: Running in container environment (Linux).", file=sys.stderr)
+        print("Voice Memos database is not accessible.", file=sys.stderr)
+        print("Please upload individual .m4a files for transcript extraction.", file=sys.stderr)
+        sys.exit(1)
+
+    recordings_dir = os.path.expanduser(VOICE_MEMOS_PATH)
+    db_path = os.path.join(recordings_dir, "CloudRecordings.db")
+    if not os.path.exists(db_path):
+        print(f"Error: Database not found at {db_path}", file=sys.stderr)
+        print("Voice Memos iCloud sync may not be enabled on this Mac.", file=sys.stderr)
+        sys.exit(1)
+    return db_path
 
 
 def format_duration(seconds):
@@ -68,7 +87,7 @@ Examples:
   %(prog)s ~/Library/.../CloudRecordings.db --month 2026-01
         """
     )
-    parser.add_argument("database", help="Path to CloudRecordings.db")
+    parser.add_argument("database", nargs="?", help="Path to CloudRecordings.db (auto-detected if omitted)")
     parser.add_argument("-o", "--output", default="-", help="Output CSV file (default: stdout)")
     
     # Date filtering options
@@ -140,7 +159,8 @@ Examples:
         """
         params = (start_core_data,)
     
-    db_path = os.path.expanduser(args.database)
+    db_path = args.database if args.database else get_default_database_path()
+    db_path = os.path.expanduser(db_path)
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     rows = conn.execute(query, params).fetchall()
     conn.close()

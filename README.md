@@ -1,6 +1,6 @@
 # Apple Voice Memos Claude Skill
 
-A Claude skill that lets you list, search, and read transcripts from Apple Voice Memos synced via iCloud locally on your machine. 
+Fetch metadata and transcripts from local Apple Voice Memos synced via iCloud. List, search, and read transcripts
 
 No audio is processed or sent anywhere. The database is opened in read-only mode. Transcripts are extracted locally from the file metadata.
 
@@ -18,6 +18,8 @@ No audio is processed or sent anywhere. The database is opened in read-only mode
 
 ## Installation
 
+### Claude Code
+
 Copy the `apple-voice-memos` directory into your Claude skills directory. You can install it at either scope:
 
 **Personal** (available in all projects):
@@ -32,27 +34,25 @@ cp -r apple-voice-memos ~/.claude/skills/apple-voice-memos
 cp -r apple-voice-memos /path/to/your/project/.claude/skills/apple-voice-memos
 ```
 
+### Claude Desktop
+
+Upload a zip archive or release archive of the apple-voice-memos directory in Settings -> Capabilities -> Skills -> Add
+
 ## Slash Command
 
-Once installed, the skill is available as a slash command in Claude Code with some hints. The [SKILL.md](./apple-voice-memos/SKILL.md) outlines how the options are used internally.
+Once installed, the skill is available as a slash command in Claude Code. The [SKILL.md](./apple-voice-memos/SKILL.md) outlines that different opsions and how they're used internally.
 
 ```
-/apple-voice-memos   [days | date | search-text] [text-only | latest | all]
+/apple-voice-memos
 ```
 
 ## How It Works
 
-The skill reads from the local iCloud-synced Voice Memos storage at:
+The skill uses two tools with auto-detection of the Voice Memos directory:
 
-```
-~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/
-```
-
-It uses three tools:
-
-- **detect-voice-memos-directly** -  Detects if iCloud sync is enabled for Voice Memos and returns the full path to the Recordings directory.
 - **extract-apple-voice-memos-metadata** - Queries the `CloudRecordings.db` SQLite database (read-only) to list recording titles, dates, durations, and filenames.
-- **extract-apple-voice-memos-transcript** - Extracts transcript text from the `tsrp` atom embedded in `.m4a` files by Apple's on-device transcription. Contains multiple output options the LLM can use, including the option to include timestamps or just plaintext.
+- **extract-apple-voice-memos-transcript** - Extracts transcript text from the `tsrp` atom embedded in `.m4a` files by Apple's on-device transcription and optionally processes it to produce line breaks, remove disfluencies, pause markers and provide timestamps.
+
 
 ## Further Reading
 
