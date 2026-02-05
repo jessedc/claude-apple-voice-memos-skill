@@ -1,19 +1,14 @@
 ---
 name: apple-voice-memos
-description: Fetch metadata and transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memos.
-argument-hint: "[days | date | search-text] [text-only | latest | all]"
+description: Fetch metadata and transcripts from local Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memos
 allowed-tools: Bash(python3:*), Bash(ls:*)
 compatibility: macOS with Voice Memos iCloud sync enable, Python 3
 license: 0BSD
-metadata:
-  version: "0.1.0"
-  author: "Jesse Collis <jesse@jessedc.dev>"
-
 ---
 
 # Apple Voice Memos
 
-Fetch metadata and transcripts from Apple Voice Memos synced via iCloud.
+Fetch local metadata and transcripts from Apple Voice Memos synced via iCloud.
 
 ## Arguments
 
@@ -69,58 +64,15 @@ User provided: $ARGUMENTS
 
 ## Prerequisites
 
-Voice Memos must be synced with iCloud on macOS. Use the detection script to verify access and obtain the recordings directory path.
-
-## Environment Detection
-
-First, determine which environment you're running in by checking the operating system:
-
-```bash
-uname -s
-```
-
-- **Darwin**: You're in **Claude Code** (local macOS). Continue to check for iCloud sync below.
-- **Linux**: You're in **Claude Desktop** (container environment). Skip to Claude Desktop Workflow section.
-
-### Checking iCloud Sync (Claude Code only)
-
-If on macOS, verify Voice Memos iCloud sync is enabled:
-
-```bash
-RECORDINGS_DIR=$(python3 ~/.claude/skills/apple-voice-memos/scripts/detect-voice-memos-directory)
-```
-
-- **If successful** (exit code 0): iCloud sync is enabled. `$RECORDINGS_DIR` contains the full path. Continue with Claude Code Workflow.
-- **If failed** (exit code 1): iCloud sync is not enabled or Voice Memos has not synced to this Mac. Inform the user and stop.
+Voice Memos must be synced with iCloud on macOS.
 
 ## Tools
 
-This skill includes three helper tools in its `scripts/` directory.
-
-### `detect-voice-memos-directory`
-
-Detects if iCloud sync is enabled for Voice Memos and returns the full path to the Recordings directory.
-
-**Output:**
-- On success: Prints the full expanded path to stdout and exits with code 0
-- On failure: Prints an error message to stderr and exits with code 1
-
-**Usage:**
-```bash
-# Get the recordings directory path
-RECORDINGS_DIR=$(python3 scripts/detect-voice-memos-directory)
-
-# Use in conditional
-if RECORDINGS_DIR=$(python3 scripts/detect-voice-memos-directory 2>/dev/null); then
-    echo "Found recordings at: $RECORDINGS_DIR"
-else
-    echo "Voice Memos directory not found"
-fi
-```
+This skill includes two helper tools in its `scripts/` directory.
 
 ### `extract-apple-voice-memos-metadata`
 
-Queries the CloudRecordings.db SQLite database to retrieve recording metadata.
+Queries the CloudRecordings.db SQLite database to retrieve recording metadata. Auto-detects the database path on macOS.
 
 **Output Format:**
 - CSV to stdout with columns: `title`, `date`, `duration`, `path`
@@ -137,22 +89,22 @@ Queries the CloudRecordings.db SQLite database to retrieve recording metadata.
 
 **Usage Examples:**
 ```bash
-# First, get the recordings directory
-RECORDINGS_DIR=$(python3 scripts/detect-voice-memos-directory)
-
-# Last 7 days
-python3 scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" -d 7
+# Last 7 days (auto-detects database)
+python3 scripts/extract-apple-voice-memos-metadata -d 7
 
 # Specific month
-python3 scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --month 2026-01
+python3 scripts/extract-apple-voice-memos-metadata --month 2026-01
 
 # Date range
-python3 scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --since 2026-01-01 --until 2026-01-31
+python3 scripts/extract-apple-voice-memos-metadata --since 2026-01-01 --until 2026-01-31
+
+# Or with explicit path (still supported)
+python3 scripts/extract-apple-voice-memos-metadata ~/Library/.../CloudRecordings.db -d 7
 ```
 
 ### `extract-apple-voice-memos-transcript`
 
-Extracts embedded transcripts from Voice Memo `.m4a` files using Apple's proprietary `tsrp` atom format.
+Extracts embedded transcripts from Voice Memo `.m4a` files using Apple's proprietary `tsrp` atom format. Auto-detects the recordings directory on macOS when given just a filename.
 
 **Output Modes:**
 - **Default**: Timestamped transcript with `[M:SS]` or `[H:MM:SS]` format
@@ -169,14 +121,14 @@ Extracts embedded transcripts from Voice Memo `.m4a` files using Apple's proprie
 
 **Usage Examples:**
 ```bash
-# First, get the recordings directory
-RECORDINGS_DIR=$(python3 scripts/detect-voice-memos-directory)
-
-# Default (with timestamps)
-python3 scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>.m4a"
+# Default (with timestamps) - filename only, auto-detects directory
+python3 scripts/extract-apple-voice-memos-transcript "20260127 132931-409ABD3B.m4a"
 
 # Plain text only
-python3 scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>.m4a" --text
+python3 scripts/extract-apple-voice-memos-transcript "20260127 132931-409ABD3B.m4a" --text
+
+# Or with full path (still supported)
+python3 scripts/extract-apple-voice-memos-transcript /full/path/to/file.m4a
 ```
 
 **Error Handling:**
@@ -188,8 +140,8 @@ python3 scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>
 
 ### Important Notes
 
-- `ZPATH` from the database contains only the filename (e.g., `20260127 132931-409ABD3B.m4a`)
-- Full path must be constructed by joining `$RECORDINGS_DIR` with the filename
+- `ZPATH` (path column) from the database contains only the filename (e.g., `20260127 132931-409ABD3B.m4a`)
+- The transcript tool auto-detects the recordings directory when given just a filename
 - All tools require only Python 3 standard library (no external dependencies)
 - Tools are designed to be read-only and safe to run repeatedly
 
@@ -228,17 +180,7 @@ Claude Desktop runs in a Linux container without access to your Mac's filesystem
 
 If you're running in Claude Code with local filesystem access, use the full workflow.
 
-### Step 1: Detect recordings directory
-
-First, detect and store the recordings directory path:
-
-```bash
-RECORDINGS_DIR=$(python3 ~/.claude/skills/apple-voice-memos/scripts/detect-voice-memos-directory)
-```
-
-If this fails, inform the user that Voice Memos iCloud sync does not appear to be enabled and stop.
-
-### Step 2: Parse arguments
+### Step 1: Parse arguments
 
 Parse the user arguments (`$ARGUMENTS`) according to these rules:
 
@@ -267,26 +209,30 @@ Parse the user arguments (`$ARGUMENTS`) according to these rules:
 5. **Plain text** (no `:` and not a number/flag):
    - Treat as search term
 
-### Step 3: Fetch recording metadata
+### Step 2: Fetch recording metadata
 
-Run the metadata extraction tool with the parsed date filtering options (using `$RECORDINGS_DIR` from Step 1):
+Run the metadata extraction tool with the parsed date filtering options:
 
 ```bash
 # Default (last 30 days)
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db"
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata
 
 # With days argument
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" -d <DAYS>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata -d <DAYS>
 
 # With year argument
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --year <YEAR>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata --year <YEAR>
 
 # With month argument
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --month <YYYY-MM>
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata --month <YYYY-MM>
 
 # With date range
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata "$RECORDINGS_DIR/CloudRecordings.db" --since <DATE> [--until <DATE>]
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-metadata --since <DATE> [--until <DATE>]
 ```
+
+**Error handling:**
+- If the command fails with "Running in container environment" → switch to Claude Desktop workflow
+- If it fails with "Database not found" → iCloud sync is not enabled
 
 The tool supports the following date filtering options:
 - `-d, --days N`: Look back N days from today
@@ -297,11 +243,11 @@ The tool supports the following date filtering options:
 
 This outputs CSV with columns: `title`, `date`, `duration`, `path`
 
-### Step 4: Apply search filter (if provided)
+### Step 3: Apply search filter (if provided)
 
 If the user specified `search:TEXT` or provided a plain text search term, filter the results to only include rows whose title contains the search text (case-insensitive match). Apply this filter when presenting results.
 
-### Step 5: Present the recordings
+### Step 4: Present the recordings
 
 Display the recordings in a clear table or list format showing:
 - Title
@@ -309,7 +255,7 @@ Display the recordings in a clear table or list format showing:
 - Duration
 - Filename
 
-### Step 6: Fetch transcripts (based on flags or request)
+### Step 5: Fetch transcripts (based on flags or request)
 
 Handle transcript extraction based on parsed flags:
 
@@ -319,23 +265,21 @@ Handle transcript extraction based on parsed flags:
 - **Single result**: Automatically fetch its transcript
 - **User request**: Fetch transcript for specific memo by title/number
 
-Fetch transcripts using `$RECORDINGS_DIR` from Step 1:
-
 ```bash
-# Default (with timestamps)
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>"
+# Default (with timestamps) - pass filename directly from metadata
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "<FILENAME>.m4a"
 
 # With text-only flag (plain text without timestamps)
-python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "$RECORDINGS_DIR/<FILENAME>" --text
+python3 ~/.claude/skills/apple-voice-memos/scripts/extract-apple-voice-memos-transcript "<FILENAME>.m4a" --text
 ```
 
-Where `<FILENAME>` is the `path` value from the metadata CSV.
+Where `<FILENAME>.m4a` is the `path` value from the metadata CSV. The script auto-detects the recordings directory.
 
 **Note**: The tool outputs timestamps by default, providing temporal context and automatically removing filler words (uh, um) for cleaner LLM consumption. Output includes paragraph breaks (blank lines) at natural topic shifts. When the user includes the `text-only` flag in their arguments, use `--text` to output plain text without timestamps.
 
 If the transcript tool exits with an error (e.g., "tsrp atom not found"), inform the user that no transcript is available for that recording. This is normal - not all memos have transcripts (the device must have generated one).
 
-### Step 7: Respond to follow-up requests
+### Step 6: Respond to follow-up requests
 
 After presenting the initial results, the user may ask to:
 - Get the transcript of a specific memo (by title or number)
