@@ -1,7 +1,7 @@
 ---
 name: apple-voice-memos
 description: Fetch metadata and transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to list, search, or read voice memos.
-argument-hint: [days | date | search-text] [text-only | latest | all]
+argument-hint: "[days | date | search-text] [text-only | latest | all]"
 allowed-tools: Bash(python3:*), Bash(ls:*)
 compatibility: macOS with Voice Memos iCloud sync enable, Python 3
 license: 0BSD
