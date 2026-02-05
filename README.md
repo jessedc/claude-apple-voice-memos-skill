@@ -34,7 +34,7 @@ cp -r apple-voice-memos /path/to/your/project/.claude/skills/apple-voice-memos
 
 ## Slash Command
 
-Once installed, the skill is available as a slash command in Claude Code with some hints. The (SKILL.md)[./apple-voice-memos/SKILL.md] outlines how the options are used internally.
+Once installed, the skill is available as a slash command in Claude Code with some hints. The [SKILL.md](./apple-voice-memos/SKILL.md) outlines how the options are used internally.
 
 ```
 /apple-voice-memos   [days | date | search-text] [text-only | latest | all]
