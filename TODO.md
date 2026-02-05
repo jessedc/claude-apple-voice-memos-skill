@@ -2,6 +2,7 @@
 
 ## Features
 - [ ] Convert to a Claude plugin as per guidance here: https://code.claude.com/docs/en/plugins#convert-existing-configurations-to-plugins
+- [ ] Provide an AGENT (or similar) with baked in system prompts for great summarization options
 
 ## Ideas
 - [ ] Search within transcript content (currently only title search is supported)
