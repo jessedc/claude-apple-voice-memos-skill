@@ -1,0 +1,323 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#   "textual>=1.0.0",
+# ]
+# ///
+# SPDX-License-Identifier: 0BSD
+"""Interactive terminal UI for browsing and extracting Apple Voice Memo transcripts."""
+
+import csv
+import io
+import os
+import subprocess
+import sys
+
+from textual import on, work
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Vertical, VerticalScroll
+from textual.widgets import (
+    Footer,
+    Header,
+    Input,
+    Label,
+    RichLog,
+    SelectionList,
+    Static,
+)
+from textual.widgets.selection_list import Selection
+
+SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+METADATA_SCRIPT = os.path.join(SCRIPTS_DIR, "extract-apple-voice-memos-metadata")
+TRANSCRIPT_SCRIPT = os.path.join(SCRIPTS_DIR, "extract-apple-voice-memos-transcript")
+
+
+def fetch_metadata(args=None):
+    """Call the metadata script and parse CSV output."""
+    cmd = [sys.executable, METADATA_SCRIPT]
+    if args:
+        cmd.extend(args)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        return None, result.stderr.strip()
+    reader = csv.DictReader(io.StringIO(result.stdout))
+    return list(reader), None
+
+
+def extract_transcript(filename, text_only=False):
+    """Call the transcript extraction script."""
+    cmd = [sys.executable, TRANSCRIPT_SCRIPT, filename]
+    if text_only:
+        cmd.append("--text")
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    if result.returncode != 0:
+        return None, result.stderr.strip()
+    return result.stdout, None
+
+
+def format_date(iso_date):
+    """Format ISO 8601 date to readable form."""
+    if not iso_date:
+        return "Unknown"
+    try:
+        date_part = iso_date[:10]
+        time_part = iso_date[11:16] if len(iso_date) > 16 else ""
+        return f"{date_part} {time_part}".strip()
+    except (IndexError, ValueError):
+        return iso_date[:19]
+
+
+def format_selection_label(rec):
+    """Build a fixed-width label for a SelectionList item."""
+    title = (rec.get("title") or "Untitled")[:35].ljust(35)
+    date = format_date(rec.get("date", "")).ljust(17)
+    duration = (rec.get("duration") or "?").ljust(8)
+    return f"{title}  {date}  {duration}"
+
+
+class VoiceMemosApp(App):
+    """Interactive browser for Apple Voice Memo transcripts."""
+
+    TITLE = "Apple Voice Memos"
+
+    CSS = """
+    #filter-input {
+        dock: top;
+        height: 3;
+        padding: 0 1;
+    }
+    #status-bar {
+        dock: top;
+        height: 1;
+        padding: 0 2;
+        color: $text-muted;
+    }
+    #recordings {
+        height: 1fr;
+        min-height: 5;
+        border: solid $primary;
+    }
+    #transcript-pane {
+        height: 1fr;
+        border: solid $success;
+        display: none;
+    }
+    #transcript-pane.visible {
+        display: block;
+    }
+    """
+
+    BINDINGS = [
+        Binding("ctrl+a", "select_all", "Select All"),
+        Binding("t", "toggle_text_only", "Text-Only", show=True),
+        Binding("enter", "extract", "Extract", priority=True),
+        Binding("escape", "back", "Back"),
+        Binding("q", "quit", "Quit"),
+    ]
+
+    def __init__(self, recordings, metadata_args=None):
+        super().__init__()
+        self.all_recordings = recordings
+        self.metadata_args = metadata_args
+        self.text_only = False
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Input(placeholder="Type to filter by title or date...", id="filter-input")
+        yield Label(self._status_text(), id="status-bar")
+        items = [
+            Selection(format_selection_label(rec), rec["path"], False)
+            for rec in self.all_recordings
+        ]
+        yield SelectionList[str](*items, id="recordings")
+        yield RichLog(wrap=True, markup=True, id="transcript-pane")
+        yield Footer()
+
+    def _status_text(self, shown=None, total=None) -> str:
+        shown = shown or len(self.all_recordings)
+        total = total or len(self.all_recordings)
+        text = f"{shown} recording{'s' if shown != 1 else ''}"
+        if shown != total:
+            text += f" (filtered from {total})"
+        if self.text_only:
+            text += "  [bold]text-only[/bold]"
+        return text
+
+    def _refresh_status(self, shown=None):
+        self.query_one("#status-bar", Label).update(
+            self._status_text(shown=shown, total=len(self.all_recordings))
+        )
+
+    @on(Input.Changed, "#filter-input")
+    def filter_recordings(self, event: Input.Changed) -> None:
+        """Filter the selection list as the user types."""
+        sel = self.query_one("#recordings", SelectionList)
+        previously_selected = set(sel.selected)
+        query = event.value.lower()
+
+        sel.clear_options()
+        filtered = []
+        for rec in self.all_recordings:
+            title = (rec.get("title") or "").lower()
+            date = (rec.get("date") or "").lower()
+            if query in title or query in date:
+                label = format_selection_label(rec)
+                selected = rec["path"] in previously_selected
+                filtered.append(Selection(label, rec["path"], selected))
+        sel.add_options(filtered)
+        self._refresh_status(shown=len(filtered))
+
+    def action_select_all(self) -> None:
+        sel = self.query_one("#recordings", SelectionList)
+        if len(sel.selected) == sel.option_count:
+            sel.deselect_all()
+        else:
+            sel.select_all()
+
+    def action_toggle_text_only(self) -> None:
+        self.text_only = not self.text_only
+        mode = "on" if self.text_only else "off"
+        self.notify(f"Text-only mode: {mode}")
+        self._refresh_status()
+
+    def action_back(self) -> None:
+        pane = self.query_one("#transcript-pane", RichLog)
+        if pane.has_class("visible"):
+            pane.remove_class("visible")
+            self.query_one("#recordings", SelectionList).focus()
+        else:
+            # Clear filter if active
+            filter_input = self.query_one("#filter-input", Input)
+            if filter_input.value:
+                filter_input.value = ""
+
+    def action_extract(self) -> None:
+        sel = self.query_one("#recordings", SelectionList)
+        selected_paths = sel.selected
+        if not selected_paths:
+            # Use highlighted item if nothing explicitly selected
+            highlighted = sel.highlighted
+            if highlighted is not None:
+                option = sel.get_option_at_index(highlighted)
+                selected_paths = [option.value]
+            else:
+                self.notify("No recordings selected", severity="warning")
+                return
+        self._do_extract(list(selected_paths))
+
+    @work(thread=True)
+    def _do_extract(self, paths: list[str]) -> None:
+        """Extract transcripts in a worker thread."""
+        # Build a path-to-recording lookup
+        rec_by_path = {r["path"]: r for r in self.all_recordings}
+
+        pane = self.query_one("#transcript-pane", RichLog)
+        self.call_from_thread(pane.clear)
+        self.call_from_thread(pane.add_class, "visible")
+
+        count = len(paths)
+        self.call_from_thread(
+            pane.write,
+            f"[bold]Extracting {count} transcript{'s' if count > 1 else ''}...[/bold]\n",
+        )
+
+        for i, path in enumerate(paths):
+            rec = rec_by_path.get(path, {})
+            title = rec.get("title") or "Untitled"
+            date = format_date(rec.get("date", ""))
+            duration = rec.get("duration") or "?"
+
+            self.call_from_thread(
+                pane.write,
+                f"\n[bold cyan]{'━' * 60}[/bold cyan]\n"
+                f"[bold]{title}[/bold]\n"
+                f"[dim]{date}  •  {duration}  •  {path}[/dim]\n"
+                f"[cyan]{'─' * 60}[/cyan]",
+            )
+
+            transcript, error = extract_transcript(path, text_only=self.text_only)
+
+            if error:
+                if "tsrp" in error.lower():
+                    self.call_from_thread(
+                        pane.write,
+                        "[yellow]No transcript available for this recording.[/yellow]\n"
+                        "[dim](Apple generates transcripts on-device; not all recordings have one)[/dim]",
+                    )
+                else:
+                    self.call_from_thread(pane.write, f"[yellow]Error: {error}[/yellow]")
+            elif transcript:
+                self.call_from_thread(pane.write, transcript.rstrip())
+            else:
+                self.call_from_thread(pane.write, "[dim](empty transcript)[/dim]")
+
+        self.call_from_thread(
+            pane.write,
+            f"\n[bold cyan]{'━' * 60}[/bold cyan]\n"
+            f"[dim]Done. Extracted {count} transcript{'s' if count > 1 else ''}. "
+            f"Press Escape to return to the list.[/dim]",
+        )
+        self.call_from_thread(pane.focus)
+
+
+def build_metadata_args(cli_args):
+    """Convert CLI arguments into metadata script args."""
+    metadata_args = []
+    for arg in cli_args:
+        if arg.startswith(("-d", "--days", "--since", "--until", "--year", "--month")):
+            metadata_args.append(arg)
+        elif arg.lstrip("-").isdigit() and not arg.startswith("--"):
+            metadata_args.extend(["-d", arg.lstrip("-")])
+        else:
+            metadata_args.append(arg)
+    return metadata_args
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Interactive terminal UI for browsing Apple Voice Memo transcripts",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+All remaining arguments are passed to the metadata script for date filtering.
+
+Examples:
+  %(prog)s                     Last 30 days (default)
+  %(prog)s -d 7                Last 7 days
+  %(prog)s --month 2026-01     January 2026
+  %(prog)s --since 2026-01-01  Since January 1st, 2026
+
+Run with: uv run voice-memos-ui [options]
+        """,
+    )
+    parser.add_argument(
+        "metadata_args",
+        nargs="*",
+        help="Arguments passed to the metadata script (e.g., -d 7, --month 2026-01)",
+    )
+    args = parser.parse_args()
+
+    metadata_args = build_metadata_args(args.metadata_args)
+
+    print("Fetching voice memo metadata...", end="", flush=True)
+    recordings, error = fetch_metadata(metadata_args if metadata_args else None)
+    print("\r\033[2K", end="", flush=True)
+
+    if error:
+        print(f"Error: {error}", file=sys.stderr)
+        sys.exit(1)
+
+    if not recordings:
+        print("No recordings found for the specified date range.")
+        print("Try increasing the range, e.g.: voice-memos-ui -d 90")
+        sys.exit(0)
+
+    app = VoiceMemosApp(recordings, metadata_args)
+    app.run()
+
+
+if __name__ == "__main__":
+    main()
