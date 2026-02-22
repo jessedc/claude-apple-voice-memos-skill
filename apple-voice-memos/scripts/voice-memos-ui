@@ -1,4 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#   "textual>=1.0.0",
+# ]
+# ///
 # SPDX-License-Identifier: 0BSD
 """Interactive terminal UI for browsing and extracting Apple Voice Memo transcripts."""
 
@@ -7,131 +13,25 @@ import io
 import os
 import subprocess
 import sys
-import termios
-import tty
+
+from textual import on, work
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Vertical, VerticalScroll
+from textual.widgets import (
+    Footer,
+    Header,
+    Input,
+    Label,
+    RichLog,
+    SelectionList,
+    Static,
+)
+from textual.widgets.selection_list import Selection
 
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 METADATA_SCRIPT = os.path.join(SCRIPTS_DIR, "extract-apple-voice-memos-metadata")
 TRANSCRIPT_SCRIPT = os.path.join(SCRIPTS_DIR, "extract-apple-voice-memos-transcript")
-
-# ANSI escape codes
-CLEAR_SCREEN = "\033[2J\033[H"
-CLEAR_LINE = "\033[2K"
-MOVE_UP = "\033[A"
-HIDE_CURSOR = "\033[?25l"
-SHOW_CURSOR = "\033[?25h"
-BOLD = "\033[1m"
-DIM = "\033[2m"
-RESET = "\033[0m"
-REVERSE = "\033[7m"
-GREEN = "\033[32m"
-CYAN = "\033[36m"
-YELLOW = "\033[33m"
-WHITE = "\033[37m"
-MAGENTA = "\033[35m"
-
-
-def get_terminal_size():
-    try:
-        columns, rows = os.get_terminal_size()
-        return rows, columns
-    except OSError:
-        return 24, 80
-
-
-def read_key():
-    """Read a single keypress, handling escape sequences for arrow keys."""
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-        if ch == "\x1b":
-            ch2 = sys.stdin.read(1)
-            if ch2 == "[":
-                ch3 = sys.stdin.read(1)
-                if ch3 == "A":
-                    return "up"
-                elif ch3 == "B":
-                    return "down"
-                elif ch3 == "C":
-                    return "right"
-                elif ch3 == "D":
-                    return "left"
-                elif ch3 == "H":
-                    return "home"
-                elif ch3 == "F":
-                    return "end"
-                elif ch3 in ("5", "6"):
-                    sys.stdin.read(1)  # consume trailing ~
-                    return "pageup" if ch3 == "5" else "pagedown"
-            return "escape"
-        elif ch == "\r" or ch == "\n":
-            return "enter"
-        elif ch == " ":
-            return "space"
-        elif ch == "\t":
-            return "tab"
-        elif ch == "\x03":
-            return "ctrl-c"
-        elif ch == "\x04":
-            return "ctrl-d"
-        elif ch == "/" or ch == "?":
-            return "/"
-        elif ch == "a" or ch == "A":
-            return "a"
-        elif ch == "t" or ch == "T":
-            return "t"
-        elif ch.lower() == "q":
-            return "q"
-        elif ch.lower() == "j":
-            return "down"
-        elif ch.lower() == "k":
-            return "up"
-        elif ch.lower() == "g":
-            return "home"
-        elif ch.lower() == "h":
-            return "help"
-        else:
-            return ch
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-
-def read_line_raw(prompt=""):
-    """Read a line of input in raw mode with basic editing support."""
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    buf = []
-    sys.stdout.write(prompt)
-    sys.stdout.flush()
-    try:
-        tty.setraw(fd)
-        while True:
-            ch = sys.stdin.read(1)
-            if ch in ("\r", "\n"):
-                sys.stdout.write("\r\n")
-                sys.stdout.flush()
-                return "".join(buf)
-            elif ch == "\x03":  # Ctrl-C
-                sys.stdout.write("\r\n")
-                sys.stdout.flush()
-                return None
-            elif ch == "\x1b":  # Escape
-                sys.stdout.write("\r\n")
-                sys.stdout.flush()
-                return None
-            elif ch in ("\x7f", "\x08"):  # Backspace
-                if buf:
-                    buf.pop()
-                    sys.stdout.write("\b \b")
-                    sys.stdout.flush()
-            else:
-                buf.append(ch)
-                sys.stdout.write(ch)
-                sys.stdout.flush()
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 def fetch_metadata(args=None):
@@ -139,23 +39,11 @@ def fetch_metadata(args=None):
     cmd = [sys.executable, METADATA_SCRIPT]
     if args:
         cmd.extend(args)
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    except FileNotFoundError:
-        print(f"Error: Could not find metadata script at {METADATA_SCRIPT}", file=sys.stderr)
-        sys.exit(1)
-    except subprocess.TimeoutExpired:
-        print("Error: Metadata script timed out", file=sys.stderr)
-        sys.exit(1)
-
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
         return None, result.stderr.strip()
-
     reader = csv.DictReader(io.StringIO(result.stdout))
-    recordings = []
-    for row in reader:
-        recordings.append(row)
-    return recordings, None
+    return list(reader), None
 
 
 def extract_transcript(filename, text_only=False):
@@ -163,352 +51,226 @@ def extract_transcript(filename, text_only=False):
     cmd = [sys.executable, TRANSCRIPT_SCRIPT, filename]
     if text_only:
         cmd.append("--text")
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    except subprocess.TimeoutExpired:
-        return None, "Transcript extraction timed out"
-
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     if result.returncode != 0:
         return None, result.stderr.strip()
-
     return result.stdout, None
 
 
 def format_date(iso_date):
-    """Format ISO 8601 date into a readable string."""
+    """Format ISO 8601 date to readable form."""
     if not iso_date:
-        return "Unknown date"
+        return "Unknown"
     try:
         date_part = iso_date[:10]
         time_part = iso_date[11:16] if len(iso_date) > 16 else ""
-        return f"{date_part} {time_part}"
+        return f"{date_part} {time_part}".strip()
     except (IndexError, ValueError):
         return iso_date[:19]
 
 
-def truncate(text, width):
-    """Truncate text to fit within width, adding ellipsis if needed."""
-    if len(text) <= width:
-        return text
-    return text[: width - 1] + "\u2026"
+def format_selection_label(rec):
+    """Build a fixed-width label for a SelectionList item."""
+    title = (rec.get("title") or "Untitled")[:35].ljust(35)
+    date = format_date(rec.get("date", "")).ljust(17)
+    duration = (rec.get("duration") or "?").ljust(8)
+    return f"{title}  {date}  {duration}"
 
 
-class VoiceMemosUI:
-    def __init__(self, recordings):
+class VoiceMemosApp(App):
+    """Interactive browser for Apple Voice Memo transcripts."""
+
+    TITLE = "Apple Voice Memos"
+
+    CSS = """
+    #filter-input {
+        dock: top;
+        height: 3;
+        padding: 0 1;
+    }
+    #status-bar {
+        dock: top;
+        height: 1;
+        padding: 0 2;
+        color: $text-muted;
+    }
+    #recordings {
+        height: 1fr;
+        min-height: 5;
+        border: solid $primary;
+    }
+    #transcript-pane {
+        height: 1fr;
+        border: solid $success;
+        display: none;
+    }
+    #transcript-pane.visible {
+        display: block;
+    }
+    """
+
+    BINDINGS = [
+        Binding("ctrl+a", "select_all", "Select All"),
+        Binding("t", "toggle_text_only", "Text-Only", show=True),
+        Binding("enter", "extract", "Extract", priority=True),
+        Binding("escape", "back", "Back"),
+        Binding("q", "quit", "Quit"),
+    ]
+
+    def __init__(self, recordings, metadata_args=None):
+        super().__init__()
         self.all_recordings = recordings
-        self.recordings = recordings
-        self.cursor = 0
-        self.scroll_offset = 0
-        self.selected = set()
-        self.search_query = ""
+        self.metadata_args = metadata_args
         self.text_only = False
-        self.message = ""
-        self.mode = "list"  # list, extracting, viewing
 
-    def apply_filter(self):
-        """Filter recordings based on search query."""
-        if not self.search_query:
-            self.recordings = self.all_recordings
-        else:
-            q = self.search_query.lower()
-            self.recordings = [
-                r for r in self.all_recordings
-                if q in (r.get("title") or "").lower()
-                or q in (r.get("date") or "").lower()
-            ]
-        self.cursor = min(self.cursor, max(0, len(self.recordings) - 1))
-        self.scroll_offset = 0
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Input(placeholder="Type to filter by title or date...", id="filter-input")
+        yield Label(self._status_text(), id="status-bar")
+        items = [
+            Selection(format_selection_label(rec), rec["path"], False)
+            for rec in self.all_recordings
+        ]
+        yield SelectionList[str](*items, id="recordings")
+        yield RichLog(wrap=True, markup=True, id="transcript-pane")
+        yield Footer()
 
-    def draw(self):
-        """Render the full UI."""
-        rows, cols = get_terminal_size()
-        lines = []
+    def _status_text(self, shown=None, total=None) -> str:
+        shown = shown or len(self.all_recordings)
+        total = total or len(self.all_recordings)
+        text = f"{shown} recording{'s' if shown != 1 else ''}"
+        if shown != total:
+            text += f" (filtered from {total})"
+        if self.text_only:
+            text += "  [bold]text-only[/bold]"
+        return text
 
-        # Header
-        header = f" {BOLD}{CYAN}Apple Voice Memos{RESET}"
-        count_info = f"{len(self.recordings)} recording{'s' if len(self.recordings) != 1 else ''}"
-        if self.search_query:
-            count_info += f" (filtered from {len(self.all_recordings)})"
-        if self.selected:
-            count_info += f"  {GREEN}{len(self.selected)} selected{RESET}"
-        header += f"  {DIM}{count_info}{RESET}"
-        lines.append(header)
-        lines.append(f" {DIM}{'─' * (cols - 2)}{RESET}")
-
-        if self.search_query:
-            lines.append(f" {YELLOW}Filter:{RESET} {self.search_query}")
-            lines.append(f" {DIM}{'─' * (cols - 2)}{RESET}")
-
-        # Column header
-        text_mode_indicator = f"  {DIM}[text-only]{RESET}" if self.text_only else ""
-        col_header = f" {DIM}   {'Title':<30}  {'Date':<17}  {'Duration':<8}  {'File'}{RESET}{text_mode_indicator}"
-        lines.append(col_header)
-
-        # Calculate available rows for the list
-        header_lines = len(lines)
-        footer_lines = 4  # help bar + message + border + padding
-        available = rows - header_lines - footer_lines
-
-        if not self.recordings:
-            lines.append("")
-            lines.append(f"   {DIM}No recordings found.{RESET}")
-            if self.search_query:
-                lines.append(f"   {DIM}Press / to change filter or Esc to clear.{RESET}")
-        else:
-            # Adjust scroll so cursor is visible
-            if self.cursor < self.scroll_offset:
-                self.scroll_offset = self.cursor
-            elif self.cursor >= self.scroll_offset + available:
-                self.scroll_offset = self.cursor - available + 1
-
-            visible = self.recordings[self.scroll_offset: self.scroll_offset + available]
-
-            for i, rec in enumerate(visible):
-                idx = i + self.scroll_offset
-                is_cursor = idx == self.cursor
-                is_selected = idx in self.selected
-
-                title = rec.get("title") or "Untitled"
-                date = format_date(rec.get("date", ""))
-                duration = rec.get("duration") or "?"
-                path = rec.get("path") or ""
-
-                # Build the marker column
-                if is_selected:
-                    marker = f"{GREEN}\u25cf{RESET}"  # filled circle
-                else:
-                    marker = " "
-
-                title_col = truncate(title, 30)
-                file_col = truncate(path, max(10, cols - 67))
-
-                line = f" {marker}  {title_col:<30}  {date:<17}  {duration:<8}  {file_col}"
-
-                if is_cursor:
-                    line = f"{REVERSE}{line}{RESET}"
-
-                lines.append(line)
-
-            # Scroll indicators
-            if self.scroll_offset > 0:
-                lines[header_lines] = lines[header_lines] + f"  {DIM}\u25b2 more{RESET}"
-            if self.scroll_offset + available < len(self.recordings):
-                if visible:
-                    lines[-1] = lines[-1] + f"  {DIM}\u25bc more{RESET}"
-
-        # Pad to fill screen
-        while len(lines) < rows - footer_lines:
-            lines.append("")
-
-        # Footer
-        lines.append(f" {DIM}{'─' * (cols - 2)}{RESET}")
-        help_text = (
-            f" {DIM}"
-            f"{'↑↓':>3} navigate  "
-            f"{'space':>5} select  "
-            f"{'enter':>5} extract  "
-            f"{'a':>1} all  "
-            f"{'t':>1} text-only{'(on)' if self.text_only else '   '}  "
-            f"{'/' :>1} filter  "
-            f"{'q':>1} quit"
-            f"{RESET}"
+    def _refresh_status(self, shown=None):
+        self.query_one("#status-bar", Label).update(
+            self._status_text(shown=shown, total=len(self.all_recordings))
         )
-        lines.append(help_text)
 
-        if self.message:
-            lines.append(f" {self.message}")
+    @on(Input.Changed, "#filter-input")
+    def filter_recordings(self, event: Input.Changed) -> None:
+        """Filter the selection list as the user types."""
+        sel = self.query_one("#recordings", SelectionList)
+        previously_selected = set(sel.selected)
+        query = event.value.lower()
+
+        sel.clear_options()
+        filtered = []
+        for rec in self.all_recordings:
+            title = (rec.get("title") or "").lower()
+            date = (rec.get("date") or "").lower()
+            if query in title or query in date:
+                label = format_selection_label(rec)
+                selected = rec["path"] in previously_selected
+                filtered.append(Selection(label, rec["path"], selected))
+        sel.add_options(filtered)
+        self._refresh_status(shown=len(filtered))
+
+    def action_select_all(self) -> None:
+        sel = self.query_one("#recordings", SelectionList)
+        if len(sel.selected) == sel.option_count:
+            sel.deselect_all()
         else:
-            lines.append("")
+            sel.select_all()
 
-        # Render
-        sys.stdout.write(HIDE_CURSOR + CLEAR_SCREEN)
-        sys.stdout.write("\n".join(lines[: rows]))
-        sys.stdout.flush()
+    def action_toggle_text_only(self) -> None:
+        self.text_only = not self.text_only
+        mode = "on" if self.text_only else "off"
+        self.notify(f"Text-only mode: {mode}")
+        self._refresh_status()
 
-    def prompt_search(self):
-        """Show search prompt and update filter."""
-        rows, cols = get_terminal_size()
-        # Position at bottom of screen
-        sys.stdout.write(f"\033[{rows};1H{CLEAR_LINE}")
-        sys.stdout.write(SHOW_CURSOR)
-        sys.stdout.flush()
-        query = read_line_raw(f" {YELLOW}Filter:{RESET} ")
-        sys.stdout.write(HIDE_CURSOR)
-        if query is not None:
-            self.search_query = query
-        self.apply_filter()
+    def action_back(self) -> None:
+        pane = self.query_one("#transcript-pane", RichLog)
+        if pane.has_class("visible"):
+            pane.remove_class("visible")
+            self.query_one("#recordings", SelectionList).focus()
+        else:
+            # Clear filter if active
+            filter_input = self.query_one("#filter-input", Input)
+            if filter_input.value:
+                filter_input.value = ""
 
-    def extract_selected(self):
-        """Extract transcripts for selected recordings."""
-        indices = sorted(self.selected) if self.selected else [self.cursor]
-        recordings_to_extract = []
-        for idx in indices:
-            if 0 <= idx < len(self.recordings):
-                recordings_to_extract.append(self.recordings[idx])
+    def action_extract(self) -> None:
+        sel = self.query_one("#recordings", SelectionList)
+        selected_paths = sel.selected
+        if not selected_paths:
+            # Use highlighted item if nothing explicitly selected
+            highlighted = sel.highlighted
+            if highlighted is not None:
+                option = sel.get_option_at_index(highlighted)
+                selected_paths = [option.value]
+            else:
+                self.notify("No recordings selected", severity="warning")
+                return
+        self._do_extract(list(selected_paths))
 
-        if not recordings_to_extract:
-            self.message = f"{YELLOW}No recordings selected.{RESET}"
-            return
+    @work(thread=True)
+    def _do_extract(self, paths: list[str]) -> None:
+        """Extract transcripts in a worker thread."""
+        # Build a path-to-recording lookup
+        rec_by_path = {r["path"]: r for r in self.all_recordings}
 
-        # Confirm
-        count = len(recordings_to_extract)
-        self.message = f"{CYAN}Extracting {count} transcript{'s' if count > 1 else ''}...{RESET}"
-        self.draw()
+        pane = self.query_one("#transcript-pane", RichLog)
+        self.call_from_thread(pane.clear)
+        self.call_from_thread(pane.add_class, "visible")
 
-        # Switch to normal terminal mode for output
-        sys.stdout.write(SHOW_CURSOR + CLEAR_SCREEN)
-        sys.stdout.flush()
+        count = len(paths)
+        self.call_from_thread(
+            pane.write,
+            f"[bold]Extracting {count} transcript{'s' if count > 1 else ''}...[/bold]\n",
+        )
 
-        for i, rec in enumerate(recordings_to_extract):
+        for i, path in enumerate(paths):
+            rec = rec_by_path.get(path, {})
             title = rec.get("title") or "Untitled"
-            path = rec.get("path") or ""
             date = format_date(rec.get("date", ""))
             duration = rec.get("duration") or "?"
 
-            # Print header for this recording
-            print(f"\n{BOLD}{CYAN}{'═' * 60}{RESET}")
-            print(f"{BOLD} {title}{RESET}")
-            print(f" {DIM}{date}  •  {duration}  •  {path}{RESET}")
-            print(f"{CYAN}{'─' * 60}{RESET}")
+            self.call_from_thread(
+                pane.write,
+                f"\n[bold cyan]{'━' * 60}[/bold cyan]\n"
+                f"[bold]{title}[/bold]\n"
+                f"[dim]{date}  •  {duration}  •  {path}[/dim]\n"
+                f"[cyan]{'─' * 60}[/cyan]",
+            )
 
             transcript, error = extract_transcript(path, text_only=self.text_only)
 
             if error:
                 if "tsrp" in error.lower():
-                    print(f" {YELLOW}No transcript available for this recording.{RESET}")
-                    print(f" {DIM}(Apple generates transcripts on-device; not all recordings have one){RESET}")
+                    self.call_from_thread(
+                        pane.write,
+                        "[yellow]No transcript available for this recording.[/yellow]\n"
+                        "[dim](Apple generates transcripts on-device; not all recordings have one)[/dim]",
+                    )
                 else:
-                    print(f" {YELLOW}Error: {error}{RESET}")
+                    self.call_from_thread(pane.write, f"[yellow]Error: {error}[/yellow]")
             elif transcript:
-                print(transcript)
+                self.call_from_thread(pane.write, transcript.rstrip())
             else:
-                print(f" {DIM}(empty transcript){RESET}")
+                self.call_from_thread(pane.write, "[dim](empty transcript)[/dim]")
 
-            if i < count - 1:
-                print()
-
-        print(f"\n{CYAN}{'═' * 60}{RESET}")
-        print(f"{DIM}Extracted {count} transcript{'s' if count > 1 else ''}.{RESET}")
-        print(f"\n{DIM}Press any key to return to the list...{RESET}")
-
-        # Wait for keypress
-        read_key()
-
-        self.message = f"{GREEN}Extracted {count} transcript{'s' if count > 1 else ''}.{RESET}"
-
-    def run(self):
-        """Main event loop."""
-        try:
-            while True:
-                self.draw()
-                key = read_key()
-
-                if key in ("q", "ctrl-c", "ctrl-d"):
-                    break
-                elif key == "up":
-                    if self.cursor > 0:
-                        self.cursor -= 1
-                elif key == "down":
-                    if self.cursor < len(self.recordings) - 1:
-                        self.cursor += 1
-                elif key == "pageup":
-                    rows, _ = get_terminal_size()
-                    self.cursor = max(0, self.cursor - (rows - 10))
-                elif key == "pagedown":
-                    rows, _ = get_terminal_size()
-                    self.cursor = min(len(self.recordings) - 1, self.cursor + (rows - 10))
-                elif key == "home":
-                    self.cursor = 0
-                elif key == "end":
-                    self.cursor = max(0, len(self.recordings) - 1)
-                elif key == "space":
-                    if self.recordings:
-                        if self.cursor in self.selected:
-                            self.selected.discard(self.cursor)
-                        else:
-                            self.selected.add(self.cursor)
-                        # Move cursor down after toggling
-                        if self.cursor < len(self.recordings) - 1:
-                            self.cursor += 1
-                        self.message = ""
-                elif key == "enter":
-                    if self.recordings:
-                        self.extract_selected()
-                elif key == "/":
-                    self.prompt_search()
-                elif key == "escape":
-                    if self.search_query:
-                        self.search_query = ""
-                        self.apply_filter()
-                        self.message = f"{DIM}Filter cleared.{RESET}"
-                elif key == "a":
-                    if self.recordings:
-                        if len(self.selected) == len(self.recordings):
-                            self.selected.clear()
-                            self.message = f"{DIM}Selection cleared.{RESET}"
-                        else:
-                            self.selected = set(range(len(self.recordings)))
-                            self.message = f"{GREEN}All {len(self.recordings)} recordings selected.{RESET}"
-                elif key == "t":
-                    self.text_only = not self.text_only
-                    state = "on" if self.text_only else "off"
-                    self.message = f"{CYAN}Text-only mode: {state}{RESET}"
-                elif key == "help":
-                    self.show_help()
-
-        finally:
-            sys.stdout.write(SHOW_CURSOR + CLEAR_SCREEN)
-            sys.stdout.flush()
-
-    def show_help(self):
-        """Show help overlay."""
-        sys.stdout.write(CLEAR_SCREEN)
-        help_text = f"""
- {BOLD}{CYAN}Apple Voice Memos — Keyboard Shortcuts{RESET}
-
- {BOLD}Navigation{RESET}
-   {CYAN}↑ / k{RESET}         Move cursor up
-   {CYAN}↓ / j{RESET}         Move cursor down
-   {CYAN}PgUp / PgDn{RESET}   Scroll by page
-   {CYAN}g / Home{RESET}      Jump to top
-   {CYAN}End{RESET}           Jump to bottom
-
- {BOLD}Selection{RESET}
-   {CYAN}Space{RESET}         Toggle selection on current item
-   {CYAN}a{RESET}             Select all / deselect all
-
- {BOLD}Actions{RESET}
-   {CYAN}Enter{RESET}         Extract transcript(s) for selected items
-                 (or current item if none selected)
-   {CYAN}t{RESET}             Toggle text-only mode (no timestamps)
-   {CYAN}/{RESET}             Filter recordings by title or date
-   {CYAN}Esc{RESET}           Clear filter
-
- {BOLD}Other{RESET}
-   {CYAN}h{RESET}             Show this help
-   {CYAN}q / Ctrl-C{RESET}    Quit
-
- {DIM}Press any key to return...{RESET}
-"""
-        sys.stdout.write(help_text)
-        sys.stdout.flush()
-        read_key()
+        self.call_from_thread(
+            pane.write,
+            f"\n[bold cyan]{'━' * 60}[/bold cyan]\n"
+            f"[dim]Done. Extracted {count} transcript{'s' if count > 1 else ''}. "
+            f"Press Escape to return to the list.[/dim]",
+        )
+        self.call_from_thread(pane.focus)
 
 
 def build_metadata_args(cli_args):
     """Convert CLI arguments into metadata script args."""
     metadata_args = []
     for arg in cli_args:
-        if arg.startswith("-d") or arg.startswith("--days"):
-            metadata_args.append(arg)
-        elif arg.startswith("--since") or arg.startswith("--until"):
-            metadata_args.append(arg)
-        elif arg.startswith("--year") or arg.startswith("--month"):
+        if arg.startswith(("-d", "--days", "--since", "--until", "--year", "--month")):
             metadata_args.append(arg)
         elif arg.lstrip("-").isdigit() and not arg.startswith("--"):
             metadata_args.extend(["-d", arg.lstrip("-")])
         else:
-            # Pass through any other flags
             metadata_args.append(arg)
     return metadata_args
 
@@ -520,17 +282,6 @@ def main():
         description="Interactive terminal UI for browsing Apple Voice Memo transcripts",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Keyboard shortcuts (in the UI):
-  ↑/↓ or j/k   Navigate recordings
-  Space         Toggle selection
-  Enter         Extract transcript(s)
-  a             Select/deselect all
-  t             Toggle text-only mode
-  /             Filter by title or date
-  Esc           Clear filter
-  h             Show help
-  q             Quit
-
 All remaining arguments are passed to the metadata script for date filtering.
 
 Examples:
@@ -538,6 +289,8 @@ Examples:
   %(prog)s -d 7                Last 7 days
   %(prog)s --month 2026-01     January 2026
   %(prog)s --since 2026-01-01  Since January 1st, 2026
+
+Run with: uv run voice-memos-ui [options]
         """,
     )
     parser.add_argument(
@@ -545,22 +298,16 @@ Examples:
         nargs="*",
         help="Arguments passed to the metadata script (e.g., -d 7, --month 2026-01)",
     )
-
     args = parser.parse_args()
-
-    # Check that stdin is a terminal
-    if not sys.stdin.isatty():
-        print("Error: This script requires an interactive terminal.", file=sys.stderr)
-        sys.exit(1)
 
     metadata_args = build_metadata_args(args.metadata_args)
 
-    print(f"{CYAN}Fetching voice memo metadata...{RESET}", end="", flush=True)
+    print("Fetching voice memo metadata...", end="", flush=True)
     recordings, error = fetch_metadata(metadata_args if metadata_args else None)
-    print(f"\r{CLEAR_LINE}", end="", flush=True)
+    print("\r\033[2K", end="", flush=True)
 
     if error:
-        print(f"Error fetching recordings: {error}", file=sys.stderr)
+        print(f"Error: {error}", file=sys.stderr)
         sys.exit(1)
 
     if not recordings:
@@ -568,8 +315,8 @@ Examples:
         print("Try increasing the range, e.g.: voice-memos-ui -d 90")
         sys.exit(0)
 
-    ui = VoiceMemosUI(recordings)
-    ui.run()
+    app = VoiceMemosApp(recordings, metadata_args)
+    app.run()
 
 
 if __name__ == "__main__":
