@@ -1,63 +1,62 @@
 # Apple Voice Memos Claude Skill
 
-A Claude skill for listing, searching, and reading transcripts from Apple Voice Memos synced via iCloud.
+Extract and process transcripts from Apple Voice Memos synced via iCloud.
 
-No audio is processed or sent anywhere. The database is opened read-only and transcripts are extracted locally from file metadata.
+## Installing this skill
 
-## Prerequisites
-
-- macOS with Voice Memos iCloud sync enabled
-- Python 3
-- Claude Code or Claude Desktop
-
-## Example Usage
-
-- "summarize my most recent voice memo"
-- "list my voice memos from 2026"
-- "Summarize the voice memo from today about "a new machine""
-
-_There's actually a lot of things you can do once the transcript is available to the LLM. You should describe the specifics of your voice memos to Claude to seek guidance on the most appropriate prompt to apply to your transcript._
-
-## Installation
-
-### Claude Code
-
-Copy the `apple-voice-memos` directory into your Claude skills directory. You can install it at either scope:
+You can install this skill into Claude Code, Gemini, Cursor, and other agents that support the [Agent Skills](https://agentskills.io/home) format:
 
 ```bash
-cp -r apple-voice-memos ~/.claude/skills/apple-voice-memos
+npx skills add https://github.com/jessedc/claude-apple-voice-memos-skill --skill apple-voice-memos
 ```
 
-Once installed, the skill is available as a slash command in Claude Code. See [SKILL.md](./apple-voice-memos/SKILL.md) for the full list of options. It will also be called automatically.
+If you get the error `npx: command not found`, you need to install Node first:
 
+```bash
+brew install node
 ```
-/apple-voice-memos
-```
 
-### Claude Desktop
+When using `npx`, you can select whether the skill should be installed just for one project or made available for all your projects.
 
-Upload a zip archive or release archive of the apple-voice-memos directory in Settings -> Capabilities -> Skills -> Add
+Alternatively, you can clone this repository and install it however you want.
+
+### Prerequisites
+
+- macOS with Voice Memos iCloud sync enabled
+
+## Using this skill
+
+The skill is called Apple Voice Memos, and can be triggered in Claude Code:
+
+> /apple-voice-memos
+
+The skill walks you through three steps:
+
+1. **Select** — Lists your 30 most recent voice memos by title, date, and duration
+2. **Extract** — Pulls the embedded transcript from the selected memo
+3. **Process** — Sends the transcript to a subagent that produces structured notes with narrative summary, detailed notes, asides, and action items
+
+You can also trigger the skill using natural language:
+
+> Use the Apple Voice Memos skill to summarize my most recent voice memo.
 
 ## How It Works
 
-The skill uses two tools with auto-detection of the Voice Memos directory:
+Two Python scripts (standard library only, no dependencies):
 
-- **extract-apple-voice-memos-metadata** - Queries the `CloudRecordings.db` SQLite database (read-only) to list recording titles, dates, duration, and filenames.
-- **extract-apple-voice-memos-transcript** - Extracts transcript text from the `tsrp` atom embedded in `.m4a` files by Apple's on-device transcription. Its default behavior appls logic to the extracted transcript to add timestamps, line breaks and remove disfluencies and pause markers.
+- **`extract-apple-voice-memos-metadata`** — Queries the `CloudRecordings.db` SQLite database (read-only) for recording titles, dates, durations, and filenames.
+- **`extract-apple-voice-memos-transcript`** — Extracts transcript text from the `tsrp` atom embedded in `.m4a` files by Apple's on-device transcription. Adds timestamps, removes filler words, and inserts paragraph breaks at natural pauses.
 
-## Limitations
-Skills are the simplest way to extend Claude's functionality, they operate within the scope of the environment Claude/Claude Code is running in. The Claude Code CLI has full filesystem access so both scripts and their defaults can be leveraged to fetch metadata and transcripts from your recordings. Claude Desktop on the other hand runs its commands in a restricted containerized environment - so you need to provide the files to the container manually. 
-
-## Extension Opportunities ([TODO.md](./TODO.md))
-- Migrating the skill to a plugin would add more functionality to Claude Desktop
-- Define an AGENT, add a new SKILL or extent the existing SKILL with some good summarisation prompts and guidelines
-
+Transcripts are extracted from the `.m4a` files present on your machine, no audio is processed.
 
 ## Further Reading
 
 - [Unlocking Apple Voice Memo Transcripts](https://thomascountz.com/2025/06/08/unlocking-apple-voice-memo-transcripts) by Thomas Countz
-- [CloudRecordings.db Details](CloudRecordings-db-details.md) - Schema and query reference for the Voice Memos database
 
 ## Acknowledgements
 
-The original transcript extraction tool (`extract-apple-voice-memos-transcript`) is by [Tomoki Aonuma](https://github.com/uasi), licensed under the [BSD Zero Clause License](https://opensource.org/license/0bsd). Source: [uasi/extract-apple-voice-memos-transcript](https://github.com/uasi/extract-apple-voice-memos-transcript).
+The original transcript extraction tool is by [Tomoki Aonuma](https://github.com/uasi), licensed under the [BSD Zero Clause License](https://opensource.org/license/0bsd). Source: [uasi/extract-apple-voice-memos-transcript](https://github.com/uasi/extract-apple-voice-memos-transcript).
+
+## License
+
+[0BSD](https://opensource.org/license/0bsd)

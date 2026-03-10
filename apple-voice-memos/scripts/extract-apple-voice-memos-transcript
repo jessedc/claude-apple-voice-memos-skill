@@ -3,7 +3,6 @@
 # Copyright (c) 2025 Tomoki Aonuma
 # Source: https://github.com/uasi/extract-apple-voice-memos-transcript
 
-import argparse
 import json
 import os
 import re
@@ -72,7 +71,7 @@ def format_timestamp(seconds):
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
-    
+
     if hours > 0:
         return f"[{hours}:{minutes:02d}:{secs:02d}]"
     else:
@@ -301,7 +300,7 @@ def extract_text_with_timestamps(json_obj):
     return "\n".join(result)
 
 
-def process_m4a_file(filename, mode):
+def process_m4a_file(filename):
     with open(filename, "rb") as f:
         file_size = f.seek(0, 2)
         f.seek(0)
@@ -326,66 +325,20 @@ def process_m4a_file(filename, mode):
         data_size = tsrp_end - current_pos
         tsrp_data = f.read(data_size)
 
-        if mode == "raw":
-            sys.stdout.buffer.write(tsrp_data)
-            return
-
-        json_obj = {}
         try:
             json_obj = json.loads(tsrp_data.decode("utf-8"))
         except Exception:
             error_exit("error: could not parse transcript data")
 
-        if mode == "json":
-            json.dump(json_obj, sys.stdout, ensure_ascii=False, separators=(",", ":"))
-            print()
-            return
-
-        if mode == "timestamps":
-            result = extract_text_with_timestamps(json_obj)
-            if result:
-                print(result)
-            return
-
-        printed = False
-        attributedString = json_obj.get("attributedString")
-        if isinstance(attributedString, list):
-            for item in attributedString:
-                if isinstance(item, str):
-                    print(item, end="")
-                    printed = True
-        elif isinstance(attributedString, dict):
-            for item in attributedString.get("runs", []):
-                if isinstance(item, str):
-                    print(item, end="")
-                    printed = True
-        if printed:
-            print()
+        result = extract_text_with_timestamps(json_obj)
+        if result:
+            print(result)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Extract transcript data from Apple Voice Memos .m4a files."
-    )
-    parser.add_argument("filename", help="path to the .m4a file")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument(
-        "--text", action="store_true", help="print transcript as plain text (without timestamps)"
-    )
-    group.add_argument(
-        "--json", action="store_true", help="print transcript data as JSON"
-    )
-    group.add_argument("--raw", action="store_true", help="print raw transcript data")
-    args = parser.parse_args()
+    if len(sys.argv) != 2:
+        print(f"Usage: {sys.argv[0]} <filename.m4a>", file=sys.stderr)
+        sys.exit(1)
 
-    if args.json:
-        mode = "json"
-    elif args.raw:
-        mode = "raw"
-    elif args.text:
-        mode = "text"
-    else:
-        mode = "timestamps"  # Default to timestamps
-
-    filepath = resolve_file_path(args.filename)
-    process_m4a_file(filepath, mode=mode)
+    filepath = resolve_file_path(sys.argv[1])
+    process_m4a_file(filepath)

@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Claude skill that provides access to Apple Voice Memos synced via iCloud on macOS. The skill includes tools to list recordings, search by date/title, and extract embedded transcripts from Voice Memo files.
+This is a Claude skill that provides access to Apple Voice Memos synced via iCloud on macOS. The skill walks the user through selecting a memo, extracting its transcript, and processing it into structured notes.
 
 ## Architecture
 
 The project consists of:
-- **Skill definition**: `apple-voice-memos/SKILL.md` - Defines the skill's capabilities, arguments, and workflow
-- **Python scripts**: Located in `apple-voice-memos/scripts/`
-  - `extract-apple-voice-memos-metadata`: Queries the CloudRecordings.db SQLite database for recording metadata (title, date, duration, filename). Auto-detects database path on macOS.
-  - `extract-apple-voice-memos-transcript`: Extracts embedded transcripts from .m4a files using the proprietary `tsrp` atom format. Auto-detects recordings directory when given just a filename.
+- **`apple-voice-memos/SKILL.md`** — Skill definition with 3-step workflow (select, extract, process)
+- **`apple-voice-memos/PROMPT.md`** — Processing prompt sent to a subagent with the transcript for structured note generation
+- **`apple-voice-memos/scripts/extract-apple-voice-memos-metadata`** — Queries the CloudRecordings.db SQLite database for the 30 most recent recordings (title, date, duration, filename)
+- **`apple-voice-memos/scripts/extract-apple-voice-memos-transcript`** — Extracts embedded transcripts from .m4a files using the proprietary `tsrp` atom format
 
 ## Key Technical Details
 
@@ -25,53 +25,20 @@ The project consists of:
   - Transcripts stored in proprietary `tsrp` atom within the m4a container
   - Not all recordings have transcripts (generated on-device by Apple)
 
-### Environment Detection
-The skill behaves differently in two environments:
-- **Claude Code (local macOS)**: Full functionality with filesystem access
-- **Claude Desktop (Linux container)**: Limited to single-file transcript extraction via uploads
-
-## Recent Updates
-
-### Improved Line-Breaking Algorithm (2026-02-04)
-- Cleaned Apple pause markers (ellipsis artifacts like `. ..`) from output
-- Sentence-ending punctuation is now the primary break signal (matching industry best practices)
-- Added paragraph breaks (blank lines) when time gap between lines exceeds 6 seconds
-- Improved false start detection ("One of my One of my" → "One of my")
-- Filler words (uh, um) are now always removed for cleaner LLM consumption
-
-### Duration in Metadata (2026-02-01)
-- Added `ZDURATION` to the metadata extraction query
-- Duration formatted as `M:SS` or `H:MM:SS` for recordings over an hour
-- CSV output now includes `duration` column between `date` and `path`
-
-### Timestamps as Default Output (2026-02-04)
-- Changed transcript extraction tool to output timestamps by default
-- Timestamps shown in `[M:SS]` or `[H:MM:SS]` format depending on recording length
-- Added `--text` flag for plain text output without timestamps
-- Intelligently groups word segments into readable lines based on time gaps and sentence structure
-
-### Claude Desktop Compatibility (2026-01-30)
-- Added environment detection to support both Claude Code and Claude Desktop
-- Claude Code: Full functionality with database queries and bulk processing
-- Claude Desktop: Single-file transcript extraction via manual .m4a file upload
-- Environment-specific error handling and user guidance
-
 ## Commands
 
 This is a Claude skill project, not a traditional development project. There are no build, test, or lint commands. The Python scripts are standalone executables that require only Python 3 standard library.
 
-To test the skill locally:
+To test the scripts locally:
 ```bash
-# List recent recordings (metadata) - auto-detects database
-python3 apple-voice-memos/scripts/extract-apple-voice-memos-metadata -d 30
+# List recent recordings (metadata)
+python3 apple-voice-memos/scripts/extract-apple-voice-memos-metadata
 
-# Extract transcript from a specific file (with timestamps - default)
+# Extract transcript from a specific file
 python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "<FILENAME>.m4a"
-
-# Extract transcript without timestamps (text only)
-python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "<FILENAME>.m4a" --text
 ```
 
 ## Important Notes
 
 - The skill uses read-only database access (`?mode=ro` in SQLite connection)
+- Scripts take no flags — metadata always returns last 30, transcript always outputs timestamped text

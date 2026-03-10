@@ -2,10 +2,8 @@
 # SPDX-License-Identifier: 0BSD
 """Export Apple Voice Memos cloud recordings to CSV."""
 
-import argparse
 import csv
 import os
-import platform
 import sqlite3
 import sys
 from datetime import datetime, timezone, timedelta
@@ -16,12 +14,6 @@ VOICE_MEMOS_PATH = "~/Library/Group Containers/group.com.apple.VoiceMemos.shared
 
 def get_default_database_path():
     """Auto-detect the CloudRecordings.db path."""
-    if platform.system() == "Linux":
-        print("Error: Running in container environment (Linux).", file=sys.stderr)
-        print("Voice Memos database is not accessible.", file=sys.stderr)
-        print("Please upload individual .m4a files for transcript extraction.", file=sys.stderr)
-        sys.exit(1)
-
     recordings_dir = os.path.expanduser(VOICE_MEMOS_PATH)
     db_path = os.path.join(recordings_dir, "CloudRecordings.db")
     if not os.path.exists(db_path):
@@ -49,130 +41,23 @@ def core_data_to_iso8601(timestamp):
     return dt.isoformat()
 
 
-def parse_date(date_str):
-    """Parse various date formats into a datetime object."""
-    formats = [
-        "%Y-%m-%d",
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%d %H:%M:%S",
-    ]
-    for fmt in formats:
-        try:
-            dt = datetime.strptime(date_str, fmt)
-            return dt.replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
-    raise ValueError(f"Unable to parse date: {date_str}")
-
-
 def main():
-    parser = argparse.ArgumentParser(
-        description="Export Voice Memos cloud recordings to CSV",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Date filtering options (mutually exclusive):
-  --days N          Look back N days from today (default: 30)
-  --since DATE      Include recordings since DATE (inclusive)
-  --until DATE      Include recordings until DATE (inclusive)
-  --year YEAR       Include recordings from specified year
-  --month YYYY-MM   Include recordings from specified month
-
-DATE formats: YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS
-
-Examples:
-  %(prog)s ~/Library/.../CloudRecordings.db --days 7
-  %(prog)s ~/Library/.../CloudRecordings.db --since 2026-01-01
-  %(prog)s ~/Library/.../CloudRecordings.db --since 2026-01-01 --until 2026-01-31
-  %(prog)s ~/Library/.../CloudRecordings.db --year 2026
-  %(prog)s ~/Library/.../CloudRecordings.db --month 2026-01
-        """
-    )
-    parser.add_argument("database", nargs="?", help="Path to CloudRecordings.db (auto-detected if omitted)")
-    parser.add_argument("-o", "--output", default="-", help="Output CSV file (default: stdout)")
-    
-    # Date filtering options
-    date_group = parser.add_mutually_exclusive_group()
-    date_group.add_argument("-d", "--days", type=int, help="Number of days to look back")
-    date_group.add_argument("--since", help="Include recordings since this date (YYYY-MM-DD)")
-    date_group.add_argument("--year", type=int, help="Include recordings from specified year")
-    date_group.add_argument("--month", help="Include recordings from specified month (YYYY-MM)")
-    
-    parser.add_argument("--until", help="Include recordings until this date (YYYY-MM-DD)")
-    
-    args = parser.parse_args()
-    
-    # Validate --until is only used with --since
-    if args.until and not args.since:
-        parser.error("--until can only be used with --since")
-    
-    # Determine date range
-    start_date = None
-    end_date = None
-    
-    if args.days is not None:
-        start_date = datetime.now(timezone.utc) - timedelta(days=args.days)
-        end_date = datetime.now(timezone.utc)
-    elif args.since:
-        start_date = parse_date(args.since)
-        end_date = parse_date(args.until) if args.until else datetime.now(timezone.utc)
-        # Make end_date inclusive by adding 1 day minus 1 second
-        if args.until:
-            end_date = end_date + timedelta(days=1) - timedelta(seconds=1)
-    elif args.year:
-        start_date = datetime(args.year, 1, 1, tzinfo=timezone.utc)
-        end_date = datetime(args.year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
-    elif args.month:
-        try:
-            year, month = map(int, args.month.split("-"))
-            start_date = datetime(year, month, 1, tzinfo=timezone.utc)
-            # Calculate last day of month
-            if month == 12:
-                end_date = datetime(year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
-            else:
-                end_date = datetime(year, month + 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
-        except (ValueError, AttributeError):
-            parser.error("--month must be in YYYY-MM format")
-    else:
-        # Default to last 30 days
-        start_date = datetime.now(timezone.utc) - timedelta(days=30)
-        end_date = datetime.now(timezone.utc)
-    
-    # Convert to Core Data timestamps
-    start_core_data = (start_date - CORE_DATA_EPOCH).total_seconds()
-    end_core_data = (end_date - CORE_DATA_EPOCH).total_seconds() if end_date else None
-    
-    # Build query
-    if end_date:
-        query = """
-        SELECT ZENCRYPTEDTITLE, ZDATE, ZDURATION, ZPATH
-        FROM ZCLOUDRECORDING
-        WHERE ZDATE >= ? AND ZDATE <= ?
-        ORDER BY ZDATE DESC
-        """
-        params = (start_core_data, end_core_data)
-    else:
-        query = """
-        SELECT ZENCRYPTEDTITLE, ZDATE, ZDURATION, ZPATH
-        FROM ZCLOUDRECORDING
-        WHERE ZDATE >= ?
-        ORDER BY ZDATE DESC
-        """
-        params = (start_core_data,)
-    
-    db_path = args.database if args.database else get_default_database_path()
-    db_path = os.path.expanduser(db_path)
+    db_path = get_default_database_path()
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    rows = conn.execute(query, params).fetchall()
+    rows = conn.execute(
+        """
+        SELECT ZENCRYPTEDTITLE, ZDATE, ZDURATION, ZPATH
+        FROM ZCLOUDRECORDING
+        ORDER BY ZDATE DESC
+        LIMIT 30
+        """
+    ).fetchall()
     conn.close()
 
-    out = open(args.output, "w", newline="") if args.output != "-" else sys.stdout
-    writer = csv.writer(out)
+    writer = csv.writer(sys.stdout)
     writer.writerow(["title", "date", "duration", "path"])
     for title, date, duration, path in rows:
         writer.writerow([title, core_data_to_iso8601(date), format_duration(duration), path])
-
-    if out is not sys.stdout:
-        out.close()
 
 
 if __name__ == "__main__":
