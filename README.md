@@ -18,7 +18,7 @@ brew install node
 
 When using `npx`, you can select whether the skill should be installed just for one project or made available for all your projects.
 
-Alternatively, you can clone this repository and install it however you want.
+Alternatively, you can clone this repository or download a release and install it however you like. 
 
 ### Prerequisites
 
