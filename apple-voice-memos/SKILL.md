@@ -52,4 +52,6 @@ Present the timestamped transcript to the user.
 
 Read `PROMPT.md` from this skill's directory. Append the transcript after the `## Transcript` heading. Send the complete prompt and transcript to a subagent with fresh context for processing.
 
-The subagent will produce a structured markdown document with narrative summary, detailed notes, asides, and action items. Present this output to the user — they can save it or ask for adjustments.
+The subagent will produce a structured markdown document with narrative summary, detailed notes, asides, and action items. Present this output to the user.
+
+After presenting the output, ask the user if they'd like to save it as a markdown file. Suggest a filename in the format `YYYY-MM-DD-slugified-title.md` derived from the memo's title and date (e.g., `2026-02-04-the-soul-of-a-new-machine.md`). Save to the current working directory by default. The user may accept, provide a different name or path, request adjustments to the content first, or skip saving.
