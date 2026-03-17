@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: 0BSD
 """Export Apple Voice Memos cloud recordings to CSV."""
 
+import argparse
 import csv
 import os
 import sqlite3
@@ -41,17 +42,48 @@ def core_data_to_iso8601(timestamp):
     return dt.isoformat()
 
 
+def iso_to_core_data(iso_date):
+    """Convert an ISO date string (YYYY-MM-DD) to Core Data timestamp."""
+    dt = datetime.strptime(iso_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    return (dt - CORE_DATA_EPOCH).total_seconds()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Query Apple Voice Memos metadata")
+    parser.add_argument("--limit", type=int, default=10, help="Max rows to return (default: 10)")
+    parser.add_argument("--offset", type=int, default=0, help="Skip first N results")
+    parser.add_argument("--search", type=str, help="Filter by title (case-insensitive substring match)")
+    parser.add_argument("--after", type=str, help="Only recordings after this date (YYYY-MM-DD)")
+    parser.add_argument("--before", type=str, help="Only recordings before this date (YYYY-MM-DD)")
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     db_path = get_default_database_path()
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    rows = conn.execute(
-        """
-        SELECT ZENCRYPTEDTITLE, ZDATE, ZDURATION, ZPATH
-        FROM ZCLOUDRECORDING
-        ORDER BY ZDATE DESC
-        LIMIT 30
-        """
-    ).fetchall()
+
+    where_clauses = []
+    params = []
+
+    if args.search:
+        where_clauses.append("ZENCRYPTEDTITLE LIKE ?")
+        params.append(f"%{args.search}%")
+
+    if args.after:
+        where_clauses.append("ZDATE >= ?")
+        params.append(iso_to_core_data(args.after))
+
+    if args.before:
+        where_clauses.append("ZDATE <= ?")
+        params.append(iso_to_core_data(args.before))
+
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    query = f"SELECT ZENCRYPTEDTITLE, ZDATE, ZDURATION, ZPATH FROM ZCLOUDRECORDING{where_sql} ORDER BY ZDATE DESC LIMIT ? OFFSET ?"
+    params.extend([args.limit, args.offset])
+
+    rows = conn.execute(query, params).fetchall()
     conn.close()
 
     writer = csv.writer(sys.stdout)

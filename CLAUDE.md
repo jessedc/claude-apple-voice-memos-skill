@@ -11,7 +11,7 @@ This is a Claude skill that provides access to Apple Voice Memos synced via iClo
 The project consists of:
 - **`apple-voice-memos/SKILL.md`** — Skill definition with 3-step workflow (select, extract, process)
 - **`apple-voice-memos/PROMPT.md`** — Processing prompt sent to a subagent with the transcript for structured note generation
-- **`apple-voice-memos/scripts/extract-apple-voice-memos-metadata`** — Queries the CloudRecordings.db SQLite database for the 30 most recent recordings (title, date, duration, filename)
+- **`apple-voice-memos/scripts/extract-apple-voice-memos-metadata`** — Queries the CloudRecordings.db SQLite database with optional filtering (title search, date range, pagination, count-only mode)
 - **`apple-voice-memos/scripts/extract-apple-voice-memos-transcript`** — Extracts embedded transcripts from .m4a files using the proprietary `tsrp` atom format
 
 ## Key Technical Details
@@ -41,4 +41,5 @@ python3 apple-voice-memos/scripts/extract-apple-voice-memos-transcript "<FILENAM
 ## Important Notes
 
 - The skill uses read-only database access (`?mode=ro` in SQLite connection)
-- Scripts take no flags — metadata always returns last 30, transcript always outputs timestamped text
+- Metadata script supports flags: `--limit N`, `--offset N`, `--search TERM`, `--after YYYY-MM-DD`, `--before YYYY-MM-DD`
+- Transcript script takes no flags — always outputs timestamped text

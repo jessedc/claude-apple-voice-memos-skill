@@ -32,7 +32,7 @@ The skill is called Apple Voice Memos, and can be triggered in Claude Code:
 
 The skill walks you through three steps:
 
-1. **Select** — Lists your 30 most recent voice memos by title, date, and duration
+1. **Select** — Finds voice memos by recency, title search, or date range
 2. **Extract** — Pulls the embedded transcript from the selected memo
 3. **Process** — Sends the transcript to a subagent that produces structured notes with narrative summary, detailed notes, asides, and action items
 
@@ -44,10 +44,20 @@ You can also trigger the skill using natural language:
 
 Two Python scripts (standard library only, no dependencies):
 
-- **`extract-apple-voice-memos-metadata`** — Queries the `CloudRecordings.db` SQLite database (read-only) for recording titles, dates, durations, and filenames.
+- **`extract-apple-voice-memos-metadata`** — Queries the `CloudRecordings.db` SQLite database (read-only) for recording titles, dates, durations, and filenames. Supports filtering and pagination.
 - **`extract-apple-voice-memos-transcript`** — Extracts transcript text from the `tsrp` atom embedded in `.m4a` files by Apple's on-device transcription. Adds timestamps, removes filler words, and inserts paragraph breaks at natural pauses.
 
 Transcripts are extracted from the `.m4a` files present on your machine, no audio is processed.
+
+## Example prompts
+
+> I recorded some thoughts on a walk yesterday, can you transcribe and summarize them?
+
+> I have a voice memo from a meeting last week — can you turn it into notes with action items?
+
+> I rambled into my phone about a project idea recently, help me make sense of it.
+
+> Summarize my latest voice memo and save it as a markdown file.
 
 ## Further Reading
 

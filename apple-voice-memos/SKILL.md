@@ -18,15 +18,22 @@ Voice Memos must be synced with iCloud on macOS.
 
 This skill includes two scripts in its `scripts/` directory:
 
-- **`extract-apple-voice-memos-metadata`** — Queries the CloudRecordings.db SQLite database (read-only) and outputs CSV with columns: `title`, `date`, `duration`, `path`. Returns the 30 most recent recordings.
+- **`extract-apple-voice-memos-metadata`** — Queries the CloudRecordings.db SQLite database (read-only) and outputs CSV with columns: `title`, `date`, `duration`, `path`. Supports optional flags: `--limit N` (default 10), `--offset N`, `--search TERM`, `--after YYYY-MM-DD`, `--before YYYY-MM-DD`.
 - **`extract-apple-voice-memos-transcript`** — Extracts the embedded transcript from a `.m4a` file's `tsrp` atom. Outputs timestamped text with filler words removed, intelligent line breaks, and paragraph breaks at natural pauses.
 
 ## Step 1: Select a voice memo
 
-Run the metadata script to list recent recordings:
+Run the metadata script to find the right recording. Choose flags based on what the user asked for:
+
+- **No specific request** → run with no flags (returns 10 most recent)
+- **User mentions a topic or keyword** → use `--search TERM`
+- **User mentions a time period** → use `--after YYYY-MM-DD` and/or `--before YYYY-MM-DD`
+- **User wants to see more results** → use `--offset N` to paginate, or `--limit N` to increase the batch size
+
+Flags can be combined, e.g. `--search work --after 2026-01-01 --limit 5`.
 
 ```bash
-python3 scripts/extract-apple-voice-memos-metadata
+python3 scripts/extract-apple-voice-memos-metadata [flags]
 ```
 
 Present the results as a numbered list showing title, date, and duration. Ask the user which memo they'd like to work with.
