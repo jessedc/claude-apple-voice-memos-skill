@@ -1,7 +1,7 @@
 ---
 name: apple-voice-memos
 description: Extract and process transcripts from Apple Voice Memos synced via iCloud. Use when the user wants to access, read, or summarize voice memos.
-allowed-tools: Bash(python3:*)
+allowed-tools: Bash(python3 *)
 compatibility: macOS with Voice Memos iCloud sync enabled, Python 3
 license: 0BSD
 ---
