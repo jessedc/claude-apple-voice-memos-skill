@@ -55,11 +55,17 @@ def parse_args():
     parser.add_argument("--search", type=str, help="Filter by title (case-insensitive substring match)")
     parser.add_argument("--after", type=str, help="Only recordings after this date (YYYY-MM-DD)")
     parser.add_argument("--before", type=str, help="Only recordings before this date (YYYY-MM-DD)")
+    parser.add_argument("--print-path", action="store_true", help="Print the Voice Memos path and exit")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+
+    if args.print_path:
+        print(VOICE_MEMOS_PATH)
+        return
+
     db_path = get_default_database_path()
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
 
